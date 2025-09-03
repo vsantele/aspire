@@ -14,9 +14,15 @@ public static class McpExtensions
             options.ServerInfo = new Implementation { Name = "Aspire MCP Server", Version = "1.0.0" };
             options.ServerInstructions =
             """
-                This MCP Server provides various tools for managing Aspire resources.
-                When a resource is mentioned, use its name with bold chars like **resourceName**.
-                Add an icon based on the resource `Type` property. Suggest the next actions based on the MCP tools that take a `resourceName` as an argument.                
+                ## Description
+                This MCP Server provides various tools for managing Aspire resources, logs, traces and commands.
+
+                ## Instructions
+                - When a resource name is returned, render it in bold chars like **resourceName**
+                - When a resource state (running, stopped, starting, ...) is returned, render it in italic chars like *running*, and add a colored badge next to it (green, red, orange, ...).
+
+                ## Tools
+
             """;
         }).WithHttpTransport();
 

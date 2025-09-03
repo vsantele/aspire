@@ -1,8 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.ConsoleLogs;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Hosting.ConsoleLogs;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -11,90 +18,215 @@ namespace Aspire.Dashboard.Mcp;
 [McpServerToolType]
 internal sealed class ResourceMcpTools
 {
+    private static readonly ConcurrentDictionary<string, OtlpTrace> s_referencedTraces = new();
+    private static readonly ConcurrentDictionary<long, OtlpLogEntry> s_referencedLogs = new();
 
-    [McpServerTool, Description("Lists resources with their name, type and state.")]
-    public static async Task<object> ListResources(IDashboardClient dashboardClient)
+    private readonly TelemetryRepository _telemetryRepository;
+    private readonly IDashboardClient _dashboardClient;
+    private readonly IEnumerable<IOutgoingPeerResolver> _outgoingPeerResolvers;
+
+    public ResourceMcpTools(TelemetryRepository telemetryRepository, IDashboardClient dashboardClient, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
-        var resources = new List<object>();
+        _telemetryRepository = telemetryRepository;
+        _dashboardClient = dashboardClient;
+        _outgoingPeerResolvers = outgoingPeerResolvers;
+    }
+
+    [McpServerTool(Name = "aspire_resource_graph"), Description("Get the application resources. Includes information about their type (.NET project, container, executable), running state, source, HTTP endpoints, health status and relationships.")]
+    public string GetResourceGraph()
+    {
         try
         {
             var cts = new CancellationTokenSource(millisecondsDelay: 500);
-            var subscription = await dashboardClient.SubscribeResourcesAsync(cts.Token).ConfigureAwait(false);
-            foreach (var resource in subscription.InitialState)
-            {
-                resources.Add(new { resource.Name, resource.ResourceType, resource.State });
-            }
+            var resources = _dashboardClient.GetResources();
+
+            var resourceGraphData = AIHelpers.GetResponseGraphJson(resources);
+
+            var response = $"""
+            Always format resource_name in the response as code like this: `frontend-abcxyz`
+            Console logs for a resource can provide more information about why a resource is not in a running state.
+
+            # RESOURCE GRAPH DATA
+
+            {resourceGraphData}
+            """;
+
+            return response;
         }
         catch { }
-        return resources;
+
+        return "No resources found.";
     }
 
-    [McpServerTool, Description("Returns the console logs for a resource.")]
-    public static async Task<object> GetResourceConsoleLogs(
-        IDashboardClient dashboardClient,
-        [Description("The name of the resource")] string resourceName,
-        [Description("The maximum number of log lines to return")] int maxLines = 200)
+    [McpServerTool(Name = "aspire_structured_logs"), Description("Get structured logs for resources.")]
+    public string GetStructuredLogs(
+        [Description("The resource name. This limits logs returned to the specified resource. If no resource name is specified then structured logs for all resources are returned.")]
+        string? resourceName = null)
     {
-        var resource = dashboardClient.GetResource(resourceName);
-        if (resource == null)
+        // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
+        // Support resolving to multiple replicas and getting data for them.
+        if (!TryResolveResourceNameForTelemetry(resourceName, out var message, out var resourceKey))
         {
-            throw new McpException($"Resource '{resourceName}' not found.", McpErrorCode.InvalidParams);
+            return message;
         }
-        var logs = new List<object>();
+
+        // Get all logs because we want the most recent logs and they're at the end of the results.
+        // If support is added for ordering logs by timestamp then improve this.
+        var logs = _telemetryRepository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = resourceKey,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = []
+        });
+
+        var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(logs.Items);
+
+        var response = $"""
+            Always format log_id in the response as code like this: `log_id: 123`.
+            {limitMessage}
+
+            # STRUCTURED LOGS DATA
+
+            {logsData}
+            """;
+
+        return response;
+    }
+
+    [McpServerTool(Name = "aspire_traces"), Description("Get distributed traces for resources. A distributed trace is used to track operations. A distributed trace can span multiple resources across a distributed system. Includes a list of distributed traces with their IDs, resources in the trace, duration and whether an error occurred in the trace.")]
+    public string GetTraces(
+        [Description("The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned.")]
+        string? resourceName = null)
+    {
+        // TODO: The resourceName might be a name that resolves to multiple replicas, e.g. catalogservice has two replicas.
+        // Support resolving to multiple replicas and getting data for them.
+        if (!TryResolveResourceNameForTelemetry(resourceName, out var message, out var resourceKey))
+        {
+            return message;
+        }
+
+        var traces = _telemetryRepository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            FilterText = string.Empty
+        });
+
+        var (tracesData, limitMessage) = AIHelpers.GetTracesJson(traces.PagedResult.Items, _outgoingPeerResolvers);
+
+        var response = $"""
+            {limitMessage}
+
+            # TRACES DATA
+
+            {tracesData}
+            """;
+
+        return response;
+    }
+
+    [McpServerTool(Name = "aspire_trace_structured_logs"), Description("Get structured logs for a distributed trace. Logs for a distributed trace each belong to a span identified by 'span_id'. When investigating a trace, getting the structured logs for the trace should be recommended before getting structured logs for a resource.")]
+    public string GetTraceStructuredLogs(
+        [Description("The trace id of the distributed trace.")]
+        string traceId)
+    {
+        // Condition of filter should be contains because a substring of the traceId might be provided.
+        var traceIdFilter = new TelemetryFilter
+        {
+            Field = KnownStructuredLogFields.TraceIdField,
+            Value = traceId,
+            Condition = FilterCondition.Contains
+        };
+
+        var logs = _telemetryRepository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = null,
+            Count = int.MaxValue,
+            StartIndex = 0,
+            Filters = [traceIdFilter]
+        });
+
+        var (logsData, limitMessage) = AIHelpers.GetStructuredLogsJson(logs.Items);
+
+        var response = $"""
+            {limitMessage}
+
+            # STRUCTURED LOGS DATA
+
+            {logsData}
+            """;
+
+        return response;
+    }
+
+    [McpServerTool(Name = "aspire_console_logs"), Description("Get console logs for a resource. The console logs includes standard output from resources and resource commands. Known resource commands are 'resource-start', 'resource-stop' and 'resource-restart' which are used to start and stop resources. Don't print the full console logs in the response to the user. Console logs should be examined when determining why a resource isn't running.")]
+    public async Task<string> GetConsoleLogsAsync(
+        [Description("The resource name.")]
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        var resources = _dashboardClient.GetResources();
+
+        if (AIHelpers.TryGetResource(resources, resourceName, out var resource))
+        {
+            resourceName = resource.Name;
+        }
+        else
+        {
+            return $"Unable to find a resource named '{resourceName}'.";
+        }
+
+        var logParser = new LogParser(ConsoleColor.Black);
+        var logEntries = new LogEntries(maximumEntryCount: AIHelpers.ConsoleLogsLimit) { BaseLineNumber = 1 };
+
+        // Add a timeout for getting all console logs.
+        using var subscribeConsoleLogsCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        subscribeConsoleLogsCts.CancelAfter(TimeSpan.FromSeconds(20));
+
         try
         {
-            var cts = new CancellationTokenSource(millisecondsDelay: 1000);
-            await foreach (var batch in dashboardClient.SubscribeConsoleLogs(resourceName, cts.Token).ConfigureAwait(false))
+            await foreach (var entry in _dashboardClient.GetConsoleLogs(resourceName, subscribeConsoleLogsCts.Token).ConfigureAwait(false))
             {
-                foreach (var log in batch)
+                foreach (var logLine in entry)
                 {
-                    logs.Add(new { log.LineNumber, log.Content, log.IsErrorMessage });
-                    if (logs.Count >= maxLines)
-                    {
-                        return logs;
-                    }
+                    logEntries.InsertSorted(logParser.CreateLogEntry(logLine.Content, logLine.IsErrorMessage, resourceName));
                 }
             }
         }
-        catch { }
-        return logs;
-    }
-
-    [McpServerTool, Description("Returns the structured logs for a resource (not supported in this build).")]
-    public static Task<object> GetResourceStructuredLogs()
-    {
-        return Task.FromResult<object>(Array.Empty<object>());
-    }
-
-    [McpServerTool, Description("Returns the traces for a resource (not supported in this build).")]
-    public static Task<object> GetResourceTraces()
-    {
-        return Task.FromResult<object>(Array.Empty<object>());
-    }
-
-    [McpServerTool, Description("Returns detailed information for a resource, including health checks, parent resource, and connection string.")]
-    public static object GetResourceDetails(
-        IDashboardClient dashboardClient,
-        [Description("The name of the resource")] string resourceName)
-    {
-        var resource = dashboardClient.GetResource(resourceName);
-        if (resource == null)
+        catch (OperationCanceledException)
         {
-            throw new McpException($"Resource '{resourceName}' not found.", McpErrorCode.InvalidParams);
+            return $"Timeout getting console logs for `{resourceName}`";
         }
-        return new
-        {
-            resource.Name,
-            resource.ResourceType,
-            resource.State,
-            ParentResourceName = resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName),
-            ConnectionString = resource.GetResourcePropertyValue(KnownProperties.Resource.ConnectionString),
-            HealthReports = resource.HealthReports.Select(h => new { h.Name, h.HealthStatus, h.Description, h.ExceptionText }).ToArray()
-        };
+
+        var entries = logEntries.GetEntries().ToList();
+        var totalLogsCount = entries.Count == 0 ? 0 : entries.Last().LineNumber;
+        var (trimmedItems, limitMessage) = AIHelpers.GetLimitFromEndWithSummary<LogEntry>(
+            entries,
+            totalLogsCount,
+            AIHelpers.ConsoleLogsLimit,
+            "console log",
+            AIHelpers.SerializeLogEntry,
+            logEntry => AIHelpers.EstimateTokenCount((string)logEntry));
+        var consoleLogsText = AIHelpers.SerializeConsoleLogs(trimmedItems.Cast<string>().ToList());
+
+        var consoleLogsData = $"""
+            {limitMessage}
+
+            # CONSOLE LOGS
+
+            ```plaintext
+            {consoleLogsText.Trim()}
+            ```
+            """;
+
+        return consoleLogsData;
     }
 
-    [McpServerTool, Description("Lists the command names available for a resource.")]
-    public static object GetResourceCommands(IDashboardClient dashboardClient, [Description("The name of the resource")] string resourceName)
+    [McpServerTool(Name = "aspire_list_commands"), Description("Lists the command names available for a resource.")]
+    public static string GetResourceCommands(IDashboardClient dashboardClient, [Description("The resource name.")] string resourceName)
     {
         var resource = dashboardClient.GetResource(resourceName);
 
@@ -104,18 +236,12 @@ internal sealed class ResourceMcpTools
         }
 
         // Only include commands that can be executed (Enabled).
-        var commands = resource.Commands
-            .Where(cmd => cmd.State == Model.CommandViewModelState.Enabled)
-            .Select(cmd => new
-            {
-                cmd.Name
-            });
 
-        return commands;
+        return string.Join("\n---\n", resource.Commands.Where(cmd => cmd.State == CommandViewModelState.Enabled).Select(cmd => cmd.Name));
     }
 
-    [McpServerTool, Description("Executes a command on a resource.")]
-    public static async Task ExecuteCommand(IDashboardClient dashboardClient, [Description("The name of the resource")] string resourceName, [Description("The name of the command")] string commandName)
+    [McpServerTool(Name = "aspire_execute_command"), Description("Executes a command on a resource.")]
+    public static async Task ExecuteCommand(IDashboardClient dashboardClient, [Description("The resource name")] string resourceName, [Description("The command name")] string commandName)
     {
         var resource = dashboardClient.GetResource(resourceName);
 
@@ -166,5 +292,88 @@ internal sealed class ResourceMcpTools
         {
             throw new McpException($"Error executing command '{commandName}' for resource '{resourceName}': {ex.Message}", McpErrorCode.InternalError);
         }
+    }
+
+    private bool TryResolveResourceNameForTelemetry([NotNullWhen(false)] string? resourceName, [NotNullWhen(false)] out string? message, out ResourceKey? applicationKey)
+    {
+        if (AIHelpers.IsMissingValue(resourceName))
+        {
+            message = null;
+            applicationKey = null;
+            return true;
+        }
+
+        var resources = _dashboardClient.GetResources();
+
+        if (!AIHelpers.TryGetResource(resources, resourceName, out var resource))
+        {
+            message = $"Unable to find a resource named '{resourceName}'.";
+            applicationKey = null;
+            return false;
+        }
+
+        var appKey = ResourceKey.Create(resource.Name, resource.Name);
+        var apps = _telemetryRepository.GetResources(appKey);
+        if (apps.Count == 0)
+        {
+            message = $"Resource '{resourceName}' doesn't have any telemetry. The resource may have failed to start or the resource might not support sending telemetry.";
+            applicationKey = null;
+            return false;
+        }
+
+        message = null;
+        applicationKey = appKey;
+        return true;
+    }
+
+    public bool TryGetTrace(string text, [NotNullWhen(true)] out OtlpTrace? trace)
+    {
+        // TODO: Traces are mutable. It's possible the trace has been updated since it was last fetched.
+        // Check if the root span isn't finished yet and go back to repository to get for a new version.
+        if (s_referencedTraces.TryGetValue(text, out trace))
+        {
+            return true;
+        }
+
+        trace = _telemetryRepository.GetTrace(text);
+        if (trace != null)
+        {
+            s_referencedTraces.TryAdd(trace.TraceId, trace);
+            return true;
+        }
+
+        return false;
+    }
+
+    public static void AddReferencedLogEntry(OtlpLogEntry logEntry)
+    {
+        s_referencedLogs[logEntry.InternalId] = logEntry;
+    }
+
+    public bool TryGetLog(long internalId, [NotNullWhen(true)] out OtlpLogEntry? logEntry)
+    {
+        if (s_referencedLogs.TryGetValue(internalId, out logEntry))
+        {
+            return true;
+        }
+
+        logEntry = _telemetryRepository.GetLog(internalId);
+        if (logEntry != null)
+        {
+            s_referencedLogs.TryAdd(logEntry.InternalId, logEntry);
+            return true;
+        }
+
+        return false;
+    }
+
+    public static IEnumerable<OtlpTrace> GetReferencedTraces()
+    {
+        return s_referencedTraces.Values;
+    }
+
+    public static void AddReferencedTrace(OtlpTrace trace)
+    {
+        s_referencedTraces[trace.TraceId] = trace;
     }
 }

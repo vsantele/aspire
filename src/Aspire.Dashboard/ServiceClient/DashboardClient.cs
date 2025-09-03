@@ -560,6 +560,12 @@ internal sealed class DashboardClient : IDashboardClient
         return null;
     }
 
+    public IReadOnlyList<ResourceViewModel> GetResources()
+    {
+        EnsureInitialized();
+        return _resourceByName.Values.ToList();
+    }
+
     public async Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
         EnsureInitialized();
