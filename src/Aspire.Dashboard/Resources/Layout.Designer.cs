@@ -19,7 +19,7 @@ namespace Aspire.Dashboard.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Layout {
@@ -129,6 +129,33 @@ namespace Aspire.Dashboard.Resources {
         public static string MainLayoutUnhandledErrorReload {
             get {
                 return ResourceManager.GetString("MainLayoutUnhandledErrorReload", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Untrusted apps can access sensitive information about the running services..
+        /// </summary>
+        public static string MessageMcpBody {
+            get {
+                return ResourceManager.GetString("MessageMcpBody", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to More information.
+        /// </summary>
+        public static string MessageMcpLink {
+            get {
+                return ResourceManager.GetString("MessageMcpLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to MCP endpoint is unsecured.
+        /// </summary>
+        public static string MessageMcpTitle {
+            get {
+                return ResourceManager.GetString("MessageMcpTitle", resourceCulture);
             }
         }
         

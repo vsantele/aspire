@@ -135,6 +135,36 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 });
             }
         }
+
+        if (Options.CurrentValue.Mcp.AuthMode == Mcp.McpAuthMode.Unsecured)
+        {
+            var dismissedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredMcpMessageDismissedKey);
+            var skipMessage = dismissedResult.Success && dismissedResult.Value;
+
+            if (!skipMessage)
+            {
+                // ShowMessageBarAsync must come after an await. Otherwise it will NRE.
+                // I think this order allows the message bar provider to be fully initialized.
+                await MessageService.ShowMessageBarAsync(options =>
+                {
+                    options.Title = Loc[nameof(Resources.Layout.MessageMcpTitle)];
+                    options.Body = Loc[nameof(Resources.Layout.MessageMcpBody)];
+                    options.Link = new()
+                    {
+                        Text = Loc[nameof(Resources.Layout.MessageMcpLink)],
+                        Href = "https://aka.ms/dotnet/aspire/mcp-unsecured",
+                        Target = "_blank"
+                    };
+                    options.Intent = MessageIntent.Warning;
+                    options.Section = DashboardUIHelpers.MessageBarSection;
+                    options.AllowDismiss = true;
+                    options.OnClose = async m =>
+                    {
+                        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredMcpMessageDismissedKey, true);
+                    };
+                });
+            }
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

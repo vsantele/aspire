@@ -63,7 +63,7 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
-            options.Mcp.AuthMode ??= McpAuthMode.Unsecured;
+            options.Mcp.AuthMode ??= McpAuthMode.ApiKey;
         }
 
         if (options.Frontend.AuthMode == FrontendAuthMode.BrowserToken && string.IsNullOrEmpty(options.Frontend.BrowserToken))

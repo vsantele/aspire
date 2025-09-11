@@ -51,3 +51,7 @@ public class McpApiKeyAuthenticationHandler : AuthenticationHandler<McpApiKeyAut
         return Task.FromResult(AuthenticateResult.NoResult());
     }
 }
+
+public sealed class McpApiKeyAuthenticationHandlerOptions : AuthenticationSchemeOptions
+{
+}

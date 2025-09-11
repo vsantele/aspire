@@ -363,7 +363,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
             if (_dashboardOptionsMonitor.CurrentValue.Mcp.AuthMode == McpAuthMode.Unsecured)
             {
-                _logger.LogWarning("MCP server is unsecured. Untrusted apps can dashboard information.");
+                _logger.LogWarning("MCP server is unsecured. Untrusted apps can access sensitive information.");
             }
 
             // Log frontend login URL last at startup so it's easy to find in the logs.
@@ -421,7 +421,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.UseMiddleware<ValidateTokenMiddleware>();
 
-        _app.MapMcp("/mcp").RequireAuthorization(McpApiKeyAuthenticationHandler.PolicyName);
+        _app.MapMcp(_dashboardOptionsMonitor.CurrentValue.Mcp.Path).RequireAuthorization(McpApiKeyAuthenticationHandler.PolicyName);
 
         // Configure the HTTP request pipeline.
         if (!_app.Environment.IsDevelopment())

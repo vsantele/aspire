@@ -41,7 +41,7 @@ public sealed class McpCompositeAuthenticationHandler(
 
             if (options.Mcp.AuthMode is McpAuthMode.ApiKey)
             {
-                yield return McpCompositeAuthenticationDefaults.AuthenticationScheme;
+                yield return McpApiKeyAuthenticationHandler.AuthenticationScheme;
             }
         }
     }

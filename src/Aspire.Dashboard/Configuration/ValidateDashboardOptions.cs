@@ -94,6 +94,11 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
                 break;
         }
 
+        if (!options.Mcp.TryParseOptions(out var mcpParseErrorMessage))
+        {
+            errorMessages.Add(mcpParseErrorMessage);
+        }
+
         switch (options.Mcp.AuthMode)
         {
             case McpAuthMode.Unsecured:
@@ -106,7 +111,12 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
                 break;
 
         }
-        
+
+        if (string.IsNullOrEmpty(options.Mcp.Path))
+        {
+            errorMessages.Add($"{DashboardConfigNames.DashboardMcpPathName.ConfigKey} must be specified and non-empty.");
+        }
+
         if (!options.ResourceServiceClient.TryParseOptions(out var resourceServiceClientParseErrorMessage))
         {
             errorMessages.Add(resourceServiceClientParseErrorMessage);

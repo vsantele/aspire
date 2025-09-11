@@ -9,13 +9,11 @@ namespace Aspire.Dashboard.Mcp;
 
 public class McpOptions
 {
-    // TODO: Add Cors options to enable custom cors policy?
-
     private byte[]? _primaryApiKeyBytes;
     private byte[]? _secondaryApiKeyBytes;
 
     public McpAuthMode? AuthMode { get; set; }
-    public string? Path { get; set; } = "/mcp";
+    public string Path { get; set; } = "/mcp";
     public string? PrimaryApiKey { get; set; }
     public string? SecondaryApiKey { get; set; }
 
