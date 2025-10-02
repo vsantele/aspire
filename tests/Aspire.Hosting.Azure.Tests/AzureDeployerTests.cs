@@ -594,7 +594,7 @@ public class AzureDeployerTests(ITestOutputHelper output)
             ["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = new { type = "String", value = "test.westus.azurecontainerapps.io" },
             ["AZURE_CONTAINER_APPS_ENVIRONMENT_ID"] = new { type = "String", value = "/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.App/managedEnvironments/testenv" }
         });
-        ConfigureTestServices(builder, armClientProvider: armClientProvider, processRunner: mockProcessRunner, activityReporter: mockActivityReporter);
+        ConfigureTestServices(builder, armClientProvider: armClientProvider, processRunner: mockProcessRunner, activityReporter: mockActivityReporter, bicepProvisioner: new NoOpBicepProvisioner());
 
         var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
         var azureEnv = builder.AddAzureEnvironment();
