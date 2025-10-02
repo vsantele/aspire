@@ -128,6 +128,8 @@
     <HelixPreCommand Include="docker info" />
     <HelixPreCommand Include="docker container ls --all" />
     <HelixPreCommand Include="docker container ls --all --format json" />
+    <HelixPreCommand Include="docker rmi netaspireci.azurecr.io/testcontainers/ryuk:0.12.0 --force" />
+    <HelixPreCommand Include="docker system prune -a --volumes" />
     <HelixPreCommand Include="$(_ShutdownDockerContainersCommand)" />
     <HelixPreCommand Include="docker volume ls" />
     <HelixPreCommand Include="$(_DeleteDockerVolumesCommand)" />
