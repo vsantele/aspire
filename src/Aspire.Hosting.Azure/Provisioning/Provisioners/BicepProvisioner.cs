@@ -215,13 +215,14 @@ internal sealed class BicepProvisioner(
             throw new InvalidOperationException($"Deployment of {resource.Name} to {resourceGroup.Name} failed with {deployment.Data.Properties.ProvisioningState}");
         }
 
-        // e.g. {  "sqlServerName": { "type": "String", "value": "<value>" }}
+                // e.g. {  "sqlServerName": { "type": "String", "value": "<value>" }}
         var outputObj = outputs?.ToObjectFromJson<JsonObject>();
 
         // Populate values into user-secrets during run mode
         if (context.ExecutionContext.IsRunMode)
         {
             var az = context.UserSecrets.Prop("Azure");
+            az["SubscriptionId"] = context.Subscription.Id.Name;
             az["Tenant"] = context.Tenant.DefaultDomain;
 
             var resourceConfig = context.UserSecrets
@@ -256,12 +257,42 @@ internal sealed class BicepProvisioner(
 
         if (outputObj is not null)
         {
-            foreach (var item in outputObj.AsObject())
+            resourceLogger.LogDebug("Processing {OutputCount} deployment outputs for resource {ResourceName}",
+                outputObj.AsObject().Count, resource.Name);
+
+            try
             {
-                // TODO: Handle complex output types
-                // Populate the resource outputs
-                resource.Outputs[item.Key] = item.Value?.Prop("value").ToString();
+                foreach (var item in outputObj.AsObject())
+                {
+                    // TODO: Handle complex output types
+                    var outputValue = item.Value?.Prop("value")?.ToString();
+                    if (outputValue is not null)
+                    {
+                        resource.Outputs[item.Key] = outputValue;
+                        resourceLogger.LogDebug("Successfully set output {Key}={Value} for resource {ResourceName}",
+                            item.Key, outputValue, resource.Name);
+                    }
+                    else
+                    {
+                        resourceLogger.LogWarning("Output {Key} has null value for resource {ResourceName}. Raw item: {RawItem}",
+                            item.Key, resource.Name, item.Value?.ToJsonString());
+                    }
+                }
+
+                resourceLogger.LogInformation("Successfully processed deployment outputs for resource {ResourceName}. Total outputs: {OutputCount}",
+                    resource.Name, resource.Outputs.Count);
             }
+            catch (Exception ex)
+            {
+                resourceLogger.LogError(ex, "Failed to process deployment outputs for resource {ResourceName}. OutputObj: {OutputObj}",
+                    resource.Name, outputObj.ToJsonString());
+                throw; // Re-throw to maintain test failure visibility
+            }
+        }
+        else
+        {
+            resourceLogger.LogWarning("No deployment outputs found for resource {ResourceName}. Raw outputs: {RawOutputs}. Deployment status: {Status}",
+                resource.Name, outputs?.ToString(), deployment.Data.Properties.ProvisioningState);
         }
 
         // Populate secret outputs from key vault (if any)

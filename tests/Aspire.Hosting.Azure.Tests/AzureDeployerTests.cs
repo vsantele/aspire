@@ -606,7 +606,38 @@ public class AzureDeployerTests(ITestOutputHelper output)
         // Act
         using var app = builder.Build();
         await app.StartAsync();
+
+        // Wait for Azure provisioning to complete before checking outputs
+        if (containerAppEnv.Resource.ProvisioningTaskCompletionSource is not null)
+        {
+            try
+            {
+                await containerAppEnv.Resource.ProvisioningTaskCompletionSource.Task.WaitAsync(TimeSpan.FromMinutes(5));
+            }
+            catch (TimeoutException)
+            {
+                Assert.Fail("Provisioning task did not complete within timeout");
+            }
+        }
+
         await app.WaitForShutdownAsync();
+
+        // Debug environment and outputs before assertion
+        var isHelix = Environment.GetEnvironmentVariable("HELIX_CORRELATION_ID") != null;
+        var helixWorkItemName = Environment.GetEnvironmentVariable("HELIX_WORKITEM_FRIENDLY_NAME");
+
+        var actualOutputs = containerAppEnv.Resource.Outputs;
+        var outputKeys = string.Join(", ", actualOutputs.Keys);
+        var outputValues = string.Join(", ", actualOutputs.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+
+        // Log debug information if assertion might fail
+        if (!actualOutputs.ContainsKey("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"))
+        {
+            throw new InvalidOperationException(
+                $"Environment Debug - IsHelix: {isHelix}, HelixWorkItem: {helixWorkItemName}. " +
+                $"Actual output keys: [{outputKeys}]. Actual output values: [{outputValues}]. " +
+                $"Expected keys: [AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN, AZURE_CONTAINER_APPS_ENVIRONMENT_ID]");
+        }
 
         // Assert that container environment outputs are propagated
         Assert.Equal("test.westus.azurecontainerapps.io", containerAppEnv.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"]);
