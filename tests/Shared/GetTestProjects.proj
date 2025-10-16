@@ -8,7 +8,8 @@
     Optional: $(TestMatrixOutputPath) - if set, generates split test matrices -->
 
   <PropertyGroup>
-    <RepoRoot>$(MSBuildThisFileDirectory)..\..\</RepoRoot>
+    <RepoRoot>$([MSBuild]::NormalizeDirectory($(MSBuildThisFileDirectory), '..', '..'))</RepoRoot>
+    <ArtifactsDir Condition="'$(ArtifactsDir)' == ''">$([MSBuild]::NormalizeDirectory($(RepoRoot), 'artifacts'))</ArtifactsDir>
   </PropertyGroup>
 
   <Target Name="GenerateListOfTestsForGithubActions"
