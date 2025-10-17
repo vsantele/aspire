@@ -109,4 +109,23 @@
     <Message Text="Project: $(MSBuildProjectName)$(_NewLine)Runner Context:$(_NewLine)$(_RunnerList)$(_NewLine)Runner support:$(_NewLine)$(_RequirementList)" />
   </Target>
 
+  <!--
+    Target called by GetTestProjects.proj to determine which test projects should run on GitHub Actions
+    and whether they should be split.
+    -->
+  <Target Name="GetRunTestsOnGithubActions" Returns="@(_ProjectInfo)">
+    <PropertyGroup>
+      <_ShouldSplit>false</_ShouldSplit>
+      <_ShouldSplit Condition="'$(SplitTestsOnCI)' == 'true'">true</_ShouldSplit>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_ProjectInfo Include="$(MSBuildProjectFullPath)">
+        <RunTestsOnGithubActions>$(RunOnGithubActions)</RunTestsOnGithubActions>
+        <SplitTests>$(_ShouldSplit)</SplitTests>
+        <MSBuildSourceProjectFile>$(MSBuildProjectFullPath)</MSBuildSourceProjectFile>
+      </_ProjectInfo>
+    </ItemGroup>
+  </Target>
+
 </Project>

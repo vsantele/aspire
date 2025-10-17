@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <Target Name="GenerateListOfTestsForGithubActions"
-          DependsOnTargets="GenerateSplitTestsMatrix">
+          DependsOnTargets="EnumerateSplitTests;GenerateSplitTestsMatrix">
     <Error Condition="'$(TestsListOutputPath)' == ''"
            Text="%24(TestsListOutputPath) is unset" />
 
@@ -39,7 +39,7 @@
     <ItemGroup>
       <ProjectRunTestsOnGithubActions Remove="@(ProjectRunTestsOnGithubActions)" Condition="'%(RunTestsOnGithubActions)' != 'true'" />
       <ProjectRunTestsOnGithubActions ShortName="$([System.IO.Path]::GetFileNameWithoutExtension('%(Identity)').Replace('Aspire.', '').Replace('.Tests', ''))" />
-      
+
       <!-- Separate split test projects from regular ones -->
       <SplitTestProjects Include="@(ProjectRunTestsOnGithubActions)" Condition="'%(SplitTests)' == 'true'" />
       <RegularTestProjects Include="@(ProjectRunTestsOnGithubActions)" Condition="'%(SplitTests)' != 'true'" />
@@ -50,12 +50,52 @@
     <WriteLinesToFile File="$(TestsListOutputPath)"
                       Lines="@(RegularTestProjects->'%(ShortName)')"
                       Overwrite="true" />
-    
+
     <!-- Write separate list for split test projects -->
     <WriteLinesToFile File="$(TestsListOutputPath).split-projects"
                       Lines="@(SplitTestProjects->'%(ShortName)')"
                       Overwrite="true"
                       Condition="'@(SplitTestProjects->Count())' &gt; 0" />
+  </Target>
+
+  <Target Name="EnumerateSplitTests">
+    <PropertyGroup>
+      <_BuildOs Condition="'$(BuildOs)' == ''">linux</_BuildOs>
+      <_BuildOs Condition="'$(BuildOs)' != ''">$(BuildOs)</_BuildOs>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_TestProjectsToExclude Include="$(RepoRoot)tests\Shared\**\*Tests.csproj" />
+      <_TestProjectsToExclude Include="$(RepoRoot)tests\testproject\**\*Tests.csproj" />
+      <_TestProjectsToExclude Include="$(RepoRoot)tests\TestingAppHost1\**\*Tests.csproj" />
+
+      <!-- This runs in a separate job -->
+      <_TestProjectsToExclude Include="$(RepoRoot)tests\Aspire.EndToEnd.Tests\**\*Tests.csproj" />
+      <!-- This runs in a separate job -->
+      <_TestProjectsToExclude Include="$(RepoRoot)tests\Aspire.Templates.Tests\**\*Tests.csproj" />
+
+      <_TestProjects Include="$(RepoRoot)tests\**\*Tests.csproj"
+                     Exclude="@(_TestProjectsToExclude)" />
+    </ItemGroup>
+
+    <!--Get which projects need split testing -->
+    <MSBuild Projects="@(_TestProjects)"
+             Properties="BuildOs=$(_BuildOs);PrepareForHelix=true"
+             Targets="GetRunTestsOnGithubActions">
+      <Output TaskParameter="TargetOutputs" ItemName="_ProjectsForSplitCheck" />
+    </MSBuild>
+
+    <ItemGroup>
+      <_ProjectsForSplitCheck Remove="@(_ProjectsForSplitCheck)" Condition="'%(RunTestsOnGithubActions)' != 'true' or '%(SplitTests)' != 'true'" />
+    </ItemGroup>
+
+    <Message Text="Building and enumerating tests for @(_ProjectsForSplitCheck->Count()) split test project(s)" Importance="High" Condition="'@(_ProjectsForSplitCheck->Count())' &gt; 0" />
+
+    <!-- Build split test projects with PrepareForHelix=true to trigger ExtractTestClassNamesV3 -->
+    <MSBuild Projects="@(_ProjectsForSplitCheck)"
+             Properties="PrepareForHelix=true;BuildOs=$(_BuildOs)"
+             Targets="Build"
+             Condition="'@(_ProjectsForSplitCheck->Count())' &gt; 0" />
   </Target>
 
   <Target Name="GenerateSplitTestsMatrix"
@@ -65,9 +105,11 @@
       <_BuildOs Condition="'$(BuildOs)' == ''">unknown</_BuildOs>
       <_BuildOs Condition="'$(BuildOs)' != ''">$(BuildOs)</_BuildOs>
     </PropertyGroup>
-    
+
+    <MakeDir Directories="$(_TestListsDir);$(TestMatrixOutputPath)" />
+
     <Message Text="Generating split tests matrix from $(_TestListsDir) to $(TestMatrixOutputPath)" Importance="High" />
-    
+
     <!-- Call PowerShell matrix generator -->
     <PropertyGroup>
       <_PwshCommand>pwsh</_PwshCommand>
@@ -79,10 +121,9 @@
       <_MatrixCommand>$(_MatrixCommand) -BuildOs &quot;$(_BuildOs)&quot;</_MatrixCommand>
     </PropertyGroup>
 
-    <Exec Command="$(_MatrixCommand)" 
-          IgnoreExitCode="false" 
-          WorkingDirectory="$(RepoRoot)" 
-          Condition="Exists('$(_TestListsDir)')" />
+    <Exec Command="$(_MatrixCommand)"
+          IgnoreExitCode="false"
+          WorkingDirectory="$(RepoRoot)" />
   </Target>
 
 </Project>
