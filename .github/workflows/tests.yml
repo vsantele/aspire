@@ -9,48 +9,12 @@ on:
         type: string
 
 jobs:
-  # Duplicated jobs so their dependencies are not blocked on both the
-  # setup jobs
-
-  setup_for_tests_lin:
-    name: Setup for tests (Linux)
+  setup_for_tests:
+    name: Setup for tests
     runs-on: ubuntu-latest
     outputs:
-      integrations_tests_matrix: ${{ steps.generate_tests_matrix.outputs.integrations_tests_matrix }}
-      templates_tests_matrix: ${{ steps.generate_tests_matrix.outputs.templates_tests_matrix }}
-      split_tests_matrix: ${{ steps.generate_tests_matrix.outputs.split_tests_matrix }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - uses: ./.github/actions/enumerate-tests
-        id: generate_tests_matrix
-        with:
-          includeIntegrations: true
-          includeTemplates: true
-
-  setup_for_tests_macos:
-    name: Setup for tests (macOS)
-    runs-on: macos-latest
-    outputs:
-      integrations_tests_matrix: ${{ steps.generate_tests_matrix.outputs.integrations_tests_matrix }}
-      templates_tests_matrix: ${{ steps.generate_tests_matrix.outputs.templates_tests_matrix }}
-      split_tests_matrix: ${{ steps.generate_tests_matrix.outputs.split_tests_matrix }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - uses: ./.github/actions/enumerate-tests
-        id: generate_tests_matrix
-        with:
-          includeIntegrations: true
-          includeTemplates: true
-
-  setup_for_tests_win:
-    name: Setup for tests (Windows)
-    runs-on: windows-latest
-    outputs:
-      integrations_tests_matrix: ${{ steps.generate_tests_matrix.outputs.integrations_tests_matrix }}
-      templates_tests_matrix: ${{ steps.generate_tests_matrix.outputs.templates_tests_matrix }}
-      split_tests_matrix: ${{ steps.generate_tests_matrix.outputs.split_tests_matrix }}
+      tests_matrix_requires_nugets: ${{ steps.generate_tests_matrix.outputs.tests_matrix_requires_nugets }}
+      tests_matrix_no_nugets: ${{ steps.generate_tests_matrix.outputs.tests_matrix_no_nugets }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -66,159 +30,121 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
-  integrations_test_lin:
+  tests_no_nugets_lin:
     uses: ./.github/workflows/run-tests.yml
-    name: Integrations Linux
-    needs: setup_for_tests_lin
+    name: Tests Linux (No Nugets)
+    needs: setup_for_tests
+    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null }}
     strategy:
       fail-fast: false
-      matrix:
-        ${{ fromJson(needs.setup_for_tests_lin.outputs.integrations_tests_matrix) }}
+      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets) }}
     with:
       testShortName: ${{ matrix.shortname }}
-      os: "ubuntu-latest"
-      # Docker tests are run on linux, and Hosting tests take longer to finish
-      testSessionTimeout: ${{ matrix.shortname == 'Hosting' && '25m' || '15m' }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\""
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
-  integrations_test_macos:
-    uses: ./.github/workflows/run-tests.yml
-    name: Integrations macos
-    needs: setup_for_tests_macos
-    strategy:
-      fail-fast: false
-      matrix:
-        ${{ fromJson(needs.setup_for_tests_macos.outputs.integrations_tests_matrix) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: "macos-latest"
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\""
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
-  integrations_test_win:
-    uses: ./.github/workflows/run-tests.yml
-    name: Integrations Windows
-    needs: setup_for_tests_win
-    strategy:
-      fail-fast: false
-      matrix:
-        ${{ fromJson(needs.setup_for_tests_win.outputs.integrations_tests_matrix) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: "windows-latest"
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\""
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
-  templates_test_lin:
-    name: Templates Linux
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests_lin, build_packages]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests_lin.outputs.templates_tests_matrix) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: "ubuntu-latest"
-      testProjectPath: tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj
-      testSessionTimeout: 20m
-      testHangTimeout: 12m
-      extraTestArgs: "--filter-not-trait quarantined=true --filter-not-trait outerloop=true --filter-class Aspire.Templates.Tests.${{ matrix.shortname }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: true
-      requiresTestSdk: true
-
-  templates_test_macos:
-    name: Templates macos
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests_macos, build_packages]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests_macos.outputs.templates_tests_matrix) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: "macos-latest"
-      testProjectPath: tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj
-      testSessionTimeout: 20m
-      testHangTimeout: 12m
-      extraTestArgs: "--filter-not-trait quarantined=true --filter-not-trait outerloop=true --filter-class Aspire.Templates.Tests.${{ matrix.shortname }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: true
-      requiresTestSdk: true
-
-  templates_test_win:
-    name: Templates Windows
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests_win, build_packages]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests_win.outputs.templates_tests_matrix) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: "windows-latest"
-      testProjectPath: tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj
-      testSessionTimeout: 20m
-      testHangTimeout: 12m
-      extraTestArgs: "--filter-not-trait quarantined=true --filter-not-trait outerloop=true --filter-class Aspire.Templates.Tests.${{ matrix.shortname }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: true
-      requiresTestSdk: true
-
-  split_tests_lin:
-    name: Split Linux
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests_lin, build_packages]
-    if: ${{ fromJson(needs.setup_for_tests_lin.outputs.split_tests_matrix).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests_lin.outputs.split_tests_matrix) }}
-    with:
-      testShortName: ${{ matrix.projectName }}_${{ matrix.shortname }}
       os: "ubuntu-latest"
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait quarantined=true --filter-not-trait outerloop=true ${{ matrix.filterArg }}"
+      extraTestArgs: "${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
       enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
 
-  split_tests_macos:
-    name: Split macos
+  tests_no_nugets_macos:
     uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests_macos, build_packages]
-    if: ${{ fromJson(needs.setup_for_tests_macos.outputs.split_tests_matrix).include[0] != null }}
+    name: Tests macOS (No Nugets)
+    needs: setup_for_tests
+    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests_macos.outputs.split_tests_matrix) }}
+      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets) }}
     with:
-      testShortName: ${{ matrix.projectName }}_${{ matrix.shortname }}
+      testShortName: ${{ matrix.shortname }}
       os: "macos-latest"
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait quarantined=true --filter-not-trait outerloop=true ${{ matrix.filterArg }}"
+      extraTestArgs: "${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
       enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
 
-  split_tests_win:
-    name: Split Windows
+  tests_no_nugets_win:
     uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests_win, build_packages]
-    if: ${{ fromJson(needs.setup_for_tests_win.outputs.split_tests_matrix).include[0] != null }}
+    name: Tests Windows (No Nugets)
+    needs: setup_for_tests
+    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests_win.outputs.split_tests_matrix) }}
+      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets) }}
     with:
-      testShortName: ${{ matrix.projectName }}_${{ matrix.shortname }}
+      testShortName: ${{ matrix.shortname }}
       os: "windows-latest"
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait quarantined=true --filter-not-trait outerloop=true ${{ matrix.filterArg }}"
+      extraTestArgs: "${{ matrix.extraTestArgs }}"
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      requiresNugets: ${{ matrix.requiresNugets }}
+      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+
+  tests_requires_nugets_lin:
+    name: Tests Linux (Requires Nugets)
+    uses: ./.github/workflows/run-tests.yml
+    needs: [setup_for_tests, build_packages]
+    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: "ubuntu-latest"
+      testProjectPath: ${{ matrix.testProjectPath }}
+      testSessionTimeout: ${{ matrix.testSessionTimeout }}
+      testHangTimeout: ${{ matrix.testHangTimeout }}
+      extraTestArgs: "${{ matrix.extraTestArgs }}"
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      requiresNugets: ${{ matrix.requiresNugets }}
+      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+
+  tests_requires_nugets_macos:
+    name: Tests macOS (Requires Nugets)
+    uses: ./.github/workflows/run-tests.yml
+    needs: [setup_for_tests, build_packages]
+    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: "macos-latest"
+      testProjectPath: ${{ matrix.testProjectPath }}
+      testSessionTimeout: ${{ matrix.testSessionTimeout }}
+      testHangTimeout: ${{ matrix.testHangTimeout }}
+      extraTestArgs: "${{ matrix.extraTestArgs }}"
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      requiresNugets: ${{ matrix.requiresNugets }}
+      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+
+  tests_requires_nugets_win:
+    name: Tests Windows (Requires Nugets)
+    uses: ./.github/workflows/run-tests.yml
+    needs: [setup_for_tests, build_packages]
+    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: "windows-latest"
+      testProjectPath: ${{ matrix.testProjectPath }}
+      testSessionTimeout: ${{ matrix.testSessionTimeout }}
+      testHangTimeout: ${{ matrix.testHangTimeout }}
+      extraTestArgs: "${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
@@ -268,15 +194,12 @@ jobs:
     needs: [
       endtoend_tests,
       extension_tests_win,
-      integrations_test_lin,
-      integrations_test_macos,
-      integrations_test_win,
-      templates_test_lin,
-      templates_test_macos,
-      templates_test_win,
-      split_tests_lin,
-      split_tests_macos,
-      split_tests_win
+      tests_no_nugets_lin,
+      tests_no_nugets_macos,
+      tests_no_nugets_win,
+      tests_requires_nugets_lin,
+      tests_requires_nugets_macos,
+      tests_requires_nugets_win
     ]
     steps:
       - name: Checkout code
