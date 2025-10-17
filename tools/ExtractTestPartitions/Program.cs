@@ -55,14 +55,14 @@ static void ExtractPartitions(string assemblyPath, string outputFile)
             // Some types couldn't be loaded due to missing dependencies
             // Use the types that did load
             types = ex.Types.Where(t => t != null).ToArray()!;
-            Console.WriteLine($"Warning: Some types could not be loaded. Loaded {types.Length} types successfully.");
+            Console.WriteLine($"** Some types could not be loaded. Loaded {types.Length} types successfully.");
         }
 
         foreach (var type in types)
         {
             // Check if type has Collection or Trait attributes
             var attributes = type.GetCustomAttributesData();
-            
+
             foreach (var attr in attributes)
             {
                 var attrTypeName = attr.AttributeType.FullName ?? attr.AttributeType.Name;
@@ -86,8 +86,8 @@ static void ExtractPartitions(string assemblyPath, string outputFile)
                     {
                         var key = attr.ConstructorArguments[0].Value as string;
                         var value = attr.ConstructorArguments[1].Value as string;
-                        
-                        if (key?.Equals("Partition", StringComparison.OrdinalIgnoreCase) == true && 
+
+                        if (key?.Equals("Partition", StringComparison.OrdinalIgnoreCase) == true &&
                             !string.IsNullOrWhiteSpace(value))
                         {
                             partitions.Add(value);

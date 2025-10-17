@@ -105,4 +105,32 @@
     </Exec>
     <Message Importance="high" Text="Combined runsheet created%0D%0A%0D%0A$(ScriptOutput)" />
   </Target>
+
+  <!--
+    Test Enumeration Target
+    This target processes individual test enumeration files created by TestEnumerationRunsheetBuilder
+    and generates the same outputs as GetTestProjects.proj.
+    -->
+  <Target Name="_GenerateTestEnumeration" BeforeTargets="Test" Condition=" '$(TestRunnerName)' == 'TestEnumerationRunsheetBuilder' and '$(MSBuildProjectName)' != '' and !$(MSBuildProjectName.EndsWith('.Tests')) ">
+    <!-- Ensure required parameters are set -->
+    <Error Condition="'$(TestsListOutputPath)' == '' and '$(TestMatrixOutputPath)' == ''"
+           Text="Either TestsListOutputPath or TestMatrixOutputPath must be specified when using TestEnumerationRunsheetBuilder" />
+
+    <PropertyGroup>
+      <!-- Set default values if not provided -->
+      <_BuildOs Condition="'$(BuildOs)' == ''">linux</_BuildOs>
+      <_BuildOs Condition="'$(BuildOs)' != ''">$(BuildOs)</_BuildOs>
+      <_TestsListOutputPath Condition="'$(TestsListOutputPath)' != ''">$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestsListOutputPath)'))</_TestsListOutputPath>
+      <_TestsListOutputPath Condition="'$(TestsListOutputPath)' == ''">$(ArtifactsDir)/TestsForGithubActions.list</_TestsListOutputPath>
+      <_TestMatrixOutputPath Condition="'$(TestMatrixOutputPath)' != ''">$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestMatrixOutputPath)'))</_TestMatrixOutputPath>
+      <_ProcessScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'process-test-enumeration.ps1'))</_ProcessScript>
+    </PropertyGroup>
+
+    <!-- Call the PowerShell script to process test enumeration files -->
+    <Exec Command="pwsh -File &quot;$(_ProcessScript)&quot; -BuildOs &quot;$(_BuildOs)&quot; -TestsListOutputPath &quot;$(_TestsListOutputPath)&quot; -TestMatrixOutputPath &quot;$(_TestMatrixOutputPath)&quot; -ArtifactsTmpDir &quot;$(ArtifactsTmpDir)&quot; -RepoRoot &quot;$(RepoRoot)&quot;"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="TestEnumerationOutput" />
+    </Exec>
+    <Message Importance="high" Text="Test enumeration completed%0D%0A%0D%0A$(TestEnumerationOutput)" />
+  </Target>
 </Project>
