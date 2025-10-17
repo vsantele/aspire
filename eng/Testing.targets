@@ -169,6 +169,16 @@
       <_RequiresTestSdk>false</_RequiresTestSdk>
       <_RequiresTestSdk Condition="'$(RequiresTestSdkForSplitTests)' == 'true'">true</_RequiresTestSdk>
       
+      <!-- Determine enablePlaywrightInstall based on project properties -->
+      <_EnablePlaywrightInstall>false</_EnablePlaywrightInstall>
+      <_EnablePlaywrightInstall Condition="'$(EnablePlaywrightInstallForSplitTests)' == 'true'">true</_EnablePlaywrightInstall>
+      
+      <!-- Use custom timeout values if provided -->
+      <_TestSessionTimeout Condition="'$(SplitTestSessionTimeout)' != ''">$(SplitTestSessionTimeout)</_TestSessionTimeout>
+      <_TestSessionTimeout Condition="'$(SplitTestSessionTimeout)' == ''">20m</_TestSessionTimeout>
+      <_TestHangTimeout Condition="'$(SplitTestHangTimeout)' != ''">$(SplitTestHangTimeout)</_TestHangTimeout>
+      <_TestHangTimeout Condition="'$(SplitTestHangTimeout)' == ''">10m</_TestHangTimeout>
+      
       <!-- Build metadata JSON -->
       <_MetadataJson>{
   "projectName": "$(MSBuildProjectName)",
@@ -176,9 +186,9 @@
   "testProjectPath": "$(_RelativeProjectPath)",
   "requiresNugets": "$(_RequiresNugets.ToLowerInvariant())",
   "requiresTestSdk": "$(_RequiresTestSdk.ToLowerInvariant())",
-  "enablePlaywrightInstall": "false",
-  "testSessionTimeout": "20m",
-  "testHangTimeout": "10m",
+  "enablePlaywrightInstall": "$(_EnablePlaywrightInstall.ToLowerInvariant())",
+  "testSessionTimeout": "$(_TestSessionTimeout)",
+  "testHangTimeout": "$(_TestHangTimeout)",
   "uncollectedTestsSessionTimeout": "15m",
   "uncollectedTestsHangTimeout": "10m"
 }</_MetadataJson>
@@ -190,7 +200,7 @@
                       Lines="$(_MetadataJson)"
                       Overwrite="true" />
 
-    <Message Text="Wrote test metadata: $(_MetadataFile) (requiresNugets=$(_RequiresNugets), requiresTestSdk=$(_RequiresTestSdk), path=$(_RelativeProjectPath))" Importance="high" />
+    <Message Text="Wrote test metadata: $(_MetadataFile) (requiresNugets=$(_RequiresNugets), requiresTestSdk=$(_RequiresTestSdk), enablePlaywright=$(_EnablePlaywrightInstall), path=$(_RelativeProjectPath))" Importance="high" />
   </Target>
 
 </Project>
