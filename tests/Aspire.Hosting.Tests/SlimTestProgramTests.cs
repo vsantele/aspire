@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Tests;
 
 [Collection("SlimTestProgram")]
-[Trait("Partition", "SlimTestProgram")]
 public class SlimTestProgramTests
 {
     private readonly SlimTestProgramFixture _slimTestProgramFixture;

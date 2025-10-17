@@ -155,30 +155,30 @@
     <PropertyGroup>
       <_HelixDir>$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix'))</_HelixDir>
       <_MetadataFile>$(_HelixDir)$(MSBuildProjectName).tests.metadata.json</_MetadataFile>
-      
+
       <!-- Calculate relative project path for metadata -->
       <_RelativeProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
       <!-- Remove leading slash/backslash if present -->
       <_RelativeProjectPath Condition="$(_RelativeProjectPath.StartsWith('/')) or $(_RelativeProjectPath.StartsWith('\\'))">$(_RelativeProjectPath.Substring(1))</_RelativeProjectPath>
-      
+
       <!-- Determine requiresNugets based on project properties -->
       <_RequiresNugets>false</_RequiresNugets>
       <_RequiresNugets Condition="'$(RequiresNugetsForSplitTests)' == 'true'">true</_RequiresNugets>
-      
+
       <!-- Determine requiresTestSdk based on project properties -->
       <_RequiresTestSdk>false</_RequiresTestSdk>
       <_RequiresTestSdk Condition="'$(RequiresTestSdkForSplitTests)' == 'true'">true</_RequiresTestSdk>
-      
+
       <!-- Determine enablePlaywrightInstall based on project properties -->
       <_EnablePlaywrightInstall>false</_EnablePlaywrightInstall>
       <_EnablePlaywrightInstall Condition="'$(EnablePlaywrightInstallForSplitTests)' == 'true'">true</_EnablePlaywrightInstall>
-      
+
       <!-- Use custom timeout values if provided -->
       <_TestSessionTimeout Condition="'$(SplitTestSessionTimeout)' != ''">$(SplitTestSessionTimeout)</_TestSessionTimeout>
       <_TestSessionTimeout Condition="'$(SplitTestSessionTimeout)' == ''">20m</_TestSessionTimeout>
       <_TestHangTimeout Condition="'$(SplitTestHangTimeout)' != ''">$(SplitTestHangTimeout)</_TestHangTimeout>
       <_TestHangTimeout Condition="'$(SplitTestHangTimeout)' == ''">10m</_TestHangTimeout>
-      
+
       <!-- Build metadata JSON -->
       <_MetadataJson>{
   "projectName": "$(MSBuildProjectName)",

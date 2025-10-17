@@ -22,7 +22,7 @@
       <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\Shared'))">true</_ShouldSkipProject>
       <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\testproject'))">true</_ShouldSkipProject>
       <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\TestingAppHost1'))">true</_ShouldSkipProject>
-      <_ShouldSkipProject Condition="'$(MSBuildProjectName)' == 'Aspire.EndToEnd.Tests'">true</_ShouldSkipProject>
+      <!--<_ShouldSkipProject Condition="'$(MSBuildProjectName)' == 'Aspire.EndToEnd.Tests'">true</_ShouldSkipProject>-->
 
       <!-- Generate short name (same logic as GetTestProjects.proj) -->
       <_ShortName>$([System.IO.Path]::GetFileNameWithoutExtension('$(MSBuildProjectName)').Replace('Aspire.', '').Replace('.Tests', ''))</_ShortName>
