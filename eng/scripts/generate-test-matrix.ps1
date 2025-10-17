@@ -43,7 +43,9 @@ param(
   [string]$OutputDirectory,
   [Parameter(Mandatory=$false)]
   [ValidateSet('windows','linux','darwin','')]
-  [string]$BuildOs = ''
+  [string]$BuildOs = '',
+  [Parameter(Mandatory=$false)]
+  [string]$RegularTestProjectsFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -132,6 +134,22 @@ function New-EntryClass($full,$meta) {
   }
 }
 
+function New-EntryRegular($shortName) {
+  [ordered]@{
+    type = 'regular'
+    projectName = "Aspire.$shortName.Tests"
+    name = $shortName
+    shortname = $shortName
+    testProjectPath = "tests/Aspire.$shortName.Tests/Aspire.$shortName.Tests.csproj"
+    filterArg = ""
+    requiresNugets = $false
+    requiresTestSdk = $false
+    enablePlaywrightInstall = $false
+    testSessionTimeout = '20m'
+    testHangTimeout = '10m'
+  }
+}
+
 if (-not (Test-Path $TestListsDirectory)) {
   Write-Warning "Test lists directory not found: $TestListsDirectory"
   exit 0
@@ -177,6 +195,15 @@ foreach ($lf in $listFiles) {
         $entries.Add( (New-EntryClass $Matches[1].Trim() $meta) ) | Out-Null
       }
     }
+  }
+}
+
+# Add regular (non-split) test projects if provided
+if ($RegularTestProjectsFile -and (Test-Path $RegularTestProjectsFile)) {
+  $regularProjects = @(Get-Content $RegularTestProjectsFile | Where-Object { $_ -and -not [string]::IsNullOrWhiteSpace($_) })
+  Write-Host "Adding $($regularProjects.Count) regular test project(s)"
+  foreach ($shortName in $regularProjects) {
+    $entries.Add( (New-EntryRegular $shortName) ) | Out-Null
   }
 }
 

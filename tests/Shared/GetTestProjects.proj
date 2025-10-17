@@ -118,10 +118,12 @@
       <_PwshCommand>pwsh</_PwshCommand>
       <_PwshCommand Condition="'$(OS)' == 'Windows_NT'">powershell</_PwshCommand>
       <_MatrixScriptPath>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'generate-test-matrix.ps1'))</_MatrixScriptPath>
+      <_RegularTestProjectsFile>$([MSBuild]::NormalizePath($(MSBuildProjectDirectory), $(TestsListOutputPath)))</_RegularTestProjectsFile>
       <_MatrixCommand>$(_PwshCommand) -NoProfile -ExecutionPolicy Bypass -File &quot;$(_MatrixScriptPath)&quot;</_MatrixCommand>
       <_MatrixCommand>$(_MatrixCommand) -TestListsDirectory &quot;$(_TestListsDir)&quot;</_MatrixCommand>
       <_MatrixCommand>$(_MatrixCommand) -OutputDirectory &quot;$(TestMatrixOutputPath)&quot;</_MatrixCommand>
       <_MatrixCommand>$(_MatrixCommand) -BuildOs &quot;$(_BuildOs)&quot;</_MatrixCommand>
+      <_MatrixCommand>$(_MatrixCommand) -RegularTestProjectsFile &quot;$(_RegularTestProjectsFile)&quot;</_MatrixCommand>
     </PropertyGroup>
 
     <Exec Command="$(_MatrixCommand)"
