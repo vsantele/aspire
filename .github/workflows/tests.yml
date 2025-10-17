@@ -150,18 +150,6 @@ jobs:
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
       enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
 
-  endtoend_tests:
-    name: EndToEnd Linux
-    uses: ./.github/workflows/run-tests.yml
-    needs: build_packages
-    with:
-      testShortName: EndToEnd
-      # EndToEnd is not run on Windows/macOS due to missing Docker support
-      os: ubuntu-latest
-      testProjectPath: tests/Aspire.EndToEnd.Tests/Aspire.EndToEnd.Tests.csproj
-      requiresNugets: true
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
   extension_tests_win:
     name: Run VS Code extension tests (Windows)
     runs-on: windows-latest
@@ -192,7 +180,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Final Test Results
     needs: [
-      endtoend_tests,
       extension_tests_win,
       tests_no_nugets_lin,
       tests_no_nugets_macos,

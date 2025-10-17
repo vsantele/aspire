@@ -146,4 +146,51 @@
     </ItemGroup>
   </Target>
 
+  <!--
+    Target to write test metadata JSON file for split tests.
+    This writes properties like requiresNugets and requiresTestSdk to metadata.json.
+    -->
+  <Target Name="WriteTestMetadata"
+          Condition="'$(SplitTestsOnCI)' == 'true' and '$(PrepareForHelix)' == 'true'">
+    <PropertyGroup>
+      <_HelixDir>$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix'))</_HelixDir>
+      <_MetadataFile>$(_HelixDir)$(MSBuildProjectName).tests.metadata.json</_MetadataFile>
+      
+      <!-- Calculate relative project path for metadata -->
+      <_RelativeProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
+      <!-- Remove leading slash/backslash if present -->
+      <_RelativeProjectPath Condition="$(_RelativeProjectPath.StartsWith('/')) or $(_RelativeProjectPath.StartsWith('\\'))">$(_RelativeProjectPath.Substring(1))</_RelativeProjectPath>
+      
+      <!-- Determine requiresNugets based on project properties -->
+      <_RequiresNugets>false</_RequiresNugets>
+      <_RequiresNugets Condition="'$(RequiresNugetsForSplitTests)' == 'true'">true</_RequiresNugets>
+      
+      <!-- Determine requiresTestSdk based on project properties -->
+      <_RequiresTestSdk>false</_RequiresTestSdk>
+      <_RequiresTestSdk Condition="'$(RequiresTestSdkForSplitTests)' == 'true'">true</_RequiresTestSdk>
+      
+      <!-- Build metadata JSON -->
+      <_MetadataJson>{
+  "projectName": "$(MSBuildProjectName)",
+  "testClassNamesPrefix": "$(MSBuildProjectName)",
+  "testProjectPath": "$(_RelativeProjectPath)",
+  "requiresNugets": "$(_RequiresNugets.ToLowerInvariant())",
+  "requiresTestSdk": "$(_RequiresTestSdk.ToLowerInvariant())",
+  "enablePlaywrightInstall": "false",
+  "testSessionTimeout": "20m",
+  "testHangTimeout": "10m",
+  "uncollectedTestsSessionTimeout": "15m",
+  "uncollectedTestsHangTimeout": "10m"
+}</_MetadataJson>
+    </PropertyGroup>
+
+    <!-- Create helix directory and write metadata file -->
+    <MakeDir Directories="$(_HelixDir)" />
+    <WriteLinesToFile File="$(_MetadataFile)"
+                      Lines="$(_MetadataJson)"
+                      Overwrite="true" />
+
+    <Message Text="Wrote test metadata: $(_MetadataFile) (requiresNugets=$(_RequiresNugets), requiresTestSdk=$(_RequiresTestSdk), path=$(_RelativeProjectPath))" Importance="high" />
+  </Target>
+
 </Project>

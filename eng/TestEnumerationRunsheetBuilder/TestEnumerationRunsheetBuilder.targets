@@ -44,13 +44,15 @@
     <!-- For split test projects, build them to generate test metadata -->
     <MSBuild Projects="@(_CurrentProject)"
              Properties="PrepareForHelix=true;BuildOs=$(BuildOs)"
-             Targets="Build"
+             Targets="Build;WriteTestMetadata"
              Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0 and '%(_ProjectInfo.SplitTests)' == 'true'" />
 
     <!-- Generate enumeration data for this project -->
     <PropertyGroup Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0">
       <!-- Convert project path to relative path for consistency -->
       <_RelativeProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
+      <!-- Remove leading slash/backslash if present -->
+      <_RelativeProjectPath Condition="$(_RelativeProjectPath.StartsWith('/')) or $(_RelativeProjectPath.StartsWith('\'))">$(_RelativeProjectPath.Substring(1))</_RelativeProjectPath>
 
       <!-- For split tests, check if test metadata was generated -->
       <_HelixDir>$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix'))</_HelixDir>

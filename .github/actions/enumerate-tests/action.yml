@@ -92,3 +92,4 @@ runs:
         path: |
           artifacts/log/**/*.binlog
           artifacts/**/*.list
+          artifacts/combined-test-matrix.json
