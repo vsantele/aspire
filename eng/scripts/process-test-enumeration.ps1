@@ -26,13 +26,18 @@ Write-Host "ArtifactsTmpDir: $ArtifactsTmpDir"
 $enumerationFiles = Get-ChildItem -Path $ArtifactsTmpDir -Filter '*.testenumeration.json' -ErrorAction SilentlyContinue
 
 if (-not $enumerationFiles) {
-    Write-Host "No test enumeration files found in $ArtifactsTmpDir"
+    Write-Error "No test enumeration files found in $ArtifactsTmpDir"
     # Create empty output files
     "" | Set-Content $TestsListOutputPath
     if ($TestMatrixOutputPath) {
         New-Item -Path $TestMatrixOutputPath -ItemType Directory -Force | Out-Null
     }
-    exit 0
+    exit 1
+}
+
+if (-not (Test-Path $TestMatrixOutputPath)) {
+    Write-Error "TestMatrixOutputPath directory does not exist: $TestMatrixOutputPath"
+    exit 1
 }
 
 Write-Host "Found $($enumerationFiles.Count) test enumeration files"
@@ -89,55 +94,50 @@ else {
 }
 
 
-# Generate test matrices if output path is specified
-if ($TestMatrixOutputPath) {
-    Write-Host "Generating test matrices..."
+Write-Host "Generating test matrices..."
 
-    # Check if TestMatrixOutputPath ends with .json (single file) or is a directory
-    $isJsonFile = $TestMatrixOutputPath -match '\.json$'
+# Check if TestMatrixOutputPath ends with .json (single file) or is a directory
+$isJsonFile = $TestMatrixOutputPath -match '\.json$'
 
-    if ($isJsonFile) {
-        # Single JSON file output - create directory for intermediate files
-        $tempMatrixDir = Join-Path (Split-Path $TestMatrixOutputPath -Parent) 'temp-matrix'
-        New-Item -Path $tempMatrixDir -ItemType Directory -Force | Out-Null
+if ($isJsonFile) {
+    # Single JSON file output - create directory for intermediate files
+    $tempMatrixDir = Join-Path (Split-Path $TestMatrixOutputPath -Parent) 'temp-matrix'
+    New-Item -Path $tempMatrixDir -ItemType Directory -Force | Out-Null
 
-        # Call existing matrix generation script if split tests exist
-        if ($splitTestProjects.Count -gt 0) {
-            $matrixScriptPath = Join-Path $RepoRoot 'eng/scripts/generate-test-matrix.ps1'
-            $testListsDir = Join-Path (Split-Path $TestsListOutputPath -Parent) 'helix'
-            Write-Host "Calling matrix generation script..."
-            & $matrixScriptPath -TestListsDirectory $testListsDir -OutputDirectory $tempMatrixDir -BuildOs $BuildOs -RegularTestProjectsFile $TestsListOutputPath
+    # Call existing matrix generation script if split tests exist
+    if ($splitTestProjects.Count -gt 0) {
+        $matrixScriptPath = Join-Path $RepoRoot 'eng/scripts/generate-test-matrix.ps1'
+        $testListsDir = Join-Path (Split-Path $TestsListOutputPath -Parent) 'helix'
+        Write-Host "Calling matrix generation script..."
+        & $matrixScriptPath -TestListsDirectory $testListsDir -OutputDirectory $tempMatrixDir -BuildOs $BuildOs -RegularTestProjectsFile $TestsListOutputPath
 
-            # Copy the generated matrix file to the expected location
-            $generatedMatrixFile = Join-Path $tempMatrixDir 'split-tests-matrix.json'
-            if (Test-Path $generatedMatrixFile) {
-                Copy-Item $generatedMatrixFile $TestMatrixOutputPath
-                Write-Host "Matrix file copied to: $TestMatrixOutputPath"
-            } else {
-                Write-Warning "Expected matrix file not found at: $generatedMatrixFile"
-            }
-
-            # Clean up temporary directory
-            Remove-Item $tempMatrixDir -Recurse -Force -ErrorAction SilentlyContinue
+        # Copy the generated matrix file to the expected location
+        $generatedMatrixFile = Join-Path $tempMatrixDir 'split-tests-matrix.json'
+        if (Test-Path $generatedMatrixFile) {
+            Copy-Item $generatedMatrixFile $TestMatrixOutputPath
+            Write-Host "Matrix file copied to: $TestMatrixOutputPath"
         } else {
-            # No split tests, create empty matrix
-            '{"include":[]}' | Set-Content $TestMatrixOutputPath
-            Write-Host "No split tests found, created empty matrix at: $TestMatrixOutputPath"
+            Write-Warning "Expected matrix file not found at: $generatedMatrixFile"
         }
-    } else {
-        # Directory output (original behavior)
-        New-Item -Path $TestMatrixOutputPath -ItemType Directory -Force | Out-Null
 
-        # Call existing matrix generation script if split tests exist
-        if ($splitTestProjects.Count -gt 0) {
-            $matrixScriptPath = Join-Path $RepoRoot 'eng/scripts/generate-test-matrix.ps1'
-            $testListsDir = Join-Path (Split-Path $TestsListOutputPath -Parent) 'helix'
-            Write-Host "Calling matrix generation script..."
-            & $matrixScriptPath -TestListsDirectory $testListsDir -OutputDirectory $TestMatrixOutputPath -BuildOs $BuildOs -RegularTestProjectsFile $TestsListOutputPath
-        }
+        # Clean up temporary directory
+        Remove-Item $tempMatrixDir -Recurse -Force -ErrorAction SilentlyContinue
+    } else {
+        # No split tests, create empty matrix
+        '{"include":[]}' | Set-Content $TestMatrixOutputPath
+        Write-Host "No split tests found, created empty matrix at: $TestMatrixOutputPath"
     }
 } else {
-    Write-Host "No TestMatrixOutputPath specified, skipping matrix generation"
+    # Directory output (original behavior)
+    New-Item -Path $TestMatrixOutputPath -ItemType Directory -Force | Out-Null
+
+    # Call existing matrix generation script if split tests exist
+    if ($splitTestProjects.Count -gt 0) {
+        $matrixScriptPath = Join-Path $RepoRoot 'eng/scripts/generate-test-matrix.ps1'
+        $testListsDir = Join-Path (Split-Path $TestsListOutputPath -Parent) 'helix'
+        Write-Host "Calling matrix generation script..."
+        & $matrixScriptPath -TestListsDirectory $testListsDir -OutputDirectory $TestMatrixOutputPath -BuildOs $BuildOs -RegularTestProjectsFile $TestsListOutputPath
+    }
 }
 
 Write-Host "Test enumeration processing completed"

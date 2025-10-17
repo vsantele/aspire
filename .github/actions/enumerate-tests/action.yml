@@ -40,7 +40,7 @@ runs:
         /p:TestsListOutputPath=artifacts/TestsForGithubActions.list
         /p:TestMatrixOutputPath=artifacts/combined-test-matrix.json
         /p:BuildOs=${{ runner.os == 'Linux' && 'linux' || runner.os == 'macOS' && 'darwin' || 'windows' }}
-        -p:PrepareForHelix=true
+        -p:GenerateCIPartitions=true
         -bl
 
     - name: Generate combined matrix outputs

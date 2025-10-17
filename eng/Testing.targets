@@ -151,7 +151,7 @@
     This writes properties like requiresNugets and requiresTestSdk to metadata.json.
     -->
   <Target Name="WriteTestMetadata"
-          Condition="'$(PrepareForHelix)' == 'true' and '$(IsTestProject)' == 'true'">
+          Condition="'$(GenerateCIPartitions)' == 'true' and '$(IsTestProject)' == 'true'">
     <PropertyGroup>
       <_HelixDir>$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix'))</_HelixDir>
       <_MetadataFile>$(_HelixDir)$(MSBuildProjectName).tests.metadata.json</_MetadataFile>

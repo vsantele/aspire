@@ -37,40 +37,9 @@
                   Overwrite="true" />
   </Target>
 
-  <!-- Used for running one helix job per test class (legacy mechanism) -->
-  <Target Name="ExtractTestClassNames"
-          Condition=" '$(IsTestProject)' == 'true' and '$(ExtractTestClassNamesForHelix)' == 'true' and '$(SplitTestsOnCI)' != 'true' and '$(PrepareForHelix)' == 'true' and '$(IsTestUtilityProject)' != 'true'"
-          BeforeTargets="ZipTestArchive">
-
-    <Error Condition="'$(ExtractTestClassNamesPrefix)' == ''"
-           Text="%24(ExtractTestClassNamesPrefix) should be set, for example - Aspire.Templates.Tests" />
-
-    <Exec Command="&quot;$(RunCommand)&quot; --filter-not-trait category=failing --list-tests" ConsoleToMSBuild="true">
-      <Output TaskParameter="ConsoleOutput" ItemName="_ListOfTestsLines" />
-    </Exec>
-
-    <PropertyGroup>
-      <_Regex>^\s*($(ExtractTestClassNamesPrefix)[^\($]+)</_Regex>
-    </PropertyGroup>
-    <ItemGroup>
-      <_TestLines0 Include="$([System.Text.RegularExpressions.Regex]::Match('%(_ListOfTestsLines.Identity)', '$(_Regex)'))" />
-      <TestClassName Include="$([System.IO.Path]::GetFileNameWithoutExtension('%(_TestLines0.Identity)'))" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <UniqueTestClassNamesFiltered Include="@(TestClassName->Distinct())" Exclude="@(TestClassNamesToSkipTests)" />
-    </ItemGroup>
-
-    <Error Text="No $(ExtractTestClassNamesPrefix) test classes found!" Condition="'@(TestClassName)' == ''" />
-
-    <WriteLinesToFile File="$(TestArchiveTestsDir)$(MSBuildProjectName).tests.list"
-                      Lines="@(UniqueTestClassNamesFiltered)"
-                      Overwrite="true" />
-  </Target>
-
   <!-- Enhanced test splitting with auto-detection (v3) -->
   <Target Name="ExtractTestClassNamesV3"
-          Condition=" '$(IsTestProject)' == 'true' and '$(SplitTestsOnCI)' == 'true' and '$(PrepareForHelix)' == 'true' and '$(IsTestUtilityProject)' != 'true'"
+          Condition=" '$(IsTestProject)' == 'true' and '$(SplitTestsOnCI)' == 'true' and ('$(PrepareForHelix)' == 'true' or '$(GenerateCIPartitions)' == 'true') and '$(IsTestUtilityProject)' != 'true'"
           BeforeTargets="ZipTestArchive">
 
     <Error Condition="'$(TestClassNamesPrefix)' == ''"

@@ -12,43 +12,45 @@
     test enumeration into the standard Arcade SDK runsheet builder pattern.
     -->
 
+  <PropertyGroup>
+    <!-- Skip projects that should be excluded (same logic as GetTestProjects.proj) -->
+    <_ShouldSkipProject>false</_ShouldSkipProject>
+    <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\Shared'))">true</_ShouldSkipProject>
+    <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\testproject'))">true</_ShouldSkipProject>
+    <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\TestingAppHost1'))">true</_ShouldSkipProject>
+
+    <!-- Generate short name (same logic as GetTestProjects.proj) -->
+    <_ShortName>$([System.IO.Path]::GetFileNameWithoutExtension('$(MSBuildProjectName)').Replace('Aspire.', '').Replace('.Tests', ''))</_ShortName>
+  </PropertyGroup>
+
   <Target Name="RunTests"
           Outputs="%(TestToRun.ResultsStdOutPath)"
-          Condition="'$(SkipTests)' != 'true' and '$(IsGitHubActionsRunner)' == 'true' and '$(RunOnGithubActions)' == 'true'">
+          Condition="'$(SkipTests)' != 'true' and '$(_ShouldSkipProject)' != 'true' and '$(IsGitHubActionsRunner)' == 'true' and '$(RunOnGithubActions)' == 'true'">
 
-    <PropertyGroup>
-      <!-- Skip projects that should be excluded (same logic as GetTestProjects.proj) -->
-      <_ShouldSkipProject>false</_ShouldSkipProject>
-      <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\Shared'))">true</_ShouldSkipProject>
-      <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\testproject'))">true</_ShouldSkipProject>
-      <_ShouldSkipProject Condition="$(MSBuildProjectDirectory.Contains('tests\TestingAppHost1'))">true</_ShouldSkipProject>
-      <!--<_ShouldSkipProject Condition="'$(MSBuildProjectName)' == 'Aspire.EndToEnd.Tests'">true</_ShouldSkipProject>-->
-
-      <!-- Generate short name (same logic as GetTestProjects.proj) -->
-      <_ShortName>$([System.IO.Path]::GetFileNameWithoutExtension('$(MSBuildProjectName)').Replace('Aspire.', '').Replace('.Tests', ''))</_ShortName>
-    </PropertyGroup>
-
-    <!-- Only process if this project should not be skipped -->
-    <ItemGroup Condition="'$(_ShouldSkipProject)' != 'true'">
-      <!-- Reuse existing GetRunTestsOnGithubActions target from Testing.targets -->
+    <!-- Reuse existing GetRunTestsOnGithubActions target from Testing.targets -->
+    <ItemGroup>
       <_CurrentProject Include="$(MSBuildProjectFullPath)" />
     </ItemGroup>
 
     <MSBuild Projects="@(_CurrentProject)"
-             Properties="BuildOs=$(BuildOs);PrepareForHelix=true"
-             Targets="GetRunTestsOnGithubActions"
-             Condition="'$(_ShouldSkipProject)' != 'true'">
+             Properties="BuildOs=$(BuildOs)"
+             Targets="GetRunTestsOnGithubActions">
       <Output TaskParameter="TargetOutputs" ItemName="_ProjectInfo" />
     </MSBuild>
 
     <!-- Build all test projects to generate test metadata (needed for requiresNugets, requiresTestSdk, etc.) -->
     <MSBuild Projects="@(_CurrentProject)"
-             Properties="PrepareForHelix=true;BuildOs=$(BuildOs)"
-             Targets="Build;WriteTestMetadata"
-             Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0" />
+             Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
+             Targets="Build;ExtractTestClassNamesV3;WriteTestMetadata"
+             Condition="'@(_ProjectInfo->Count())' > 0 and '%(_ProjectInfo.SplitTests)' == 'true'" />
+
+    <MSBuild Projects="@(_CurrentProject)"
+             Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
+             Targets="WriteTestMetadata"
+             Condition="'@(_ProjectInfo->Count())' > 0 and '%(_ProjectInfo.SplitTests)' != 'true'" />
 
     <!-- Generate enumeration data for this project -->
-    <PropertyGroup Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0">
+    <PropertyGroup Condition="'@(_ProjectInfo->Count())' > 0">
       <!-- Convert project path to relative path for consistency -->
       <_RelativeProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
       <!-- Remove leading slash/backslash if present -->
@@ -76,21 +78,17 @@
     </PropertyGroup>
 
     <!-- Create output directory and write enumeration file -->
-    <MakeDir Directories="$(ArtifactsTmpDir)" Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0" />
+    <MakeDir Directories="$(ArtifactsTmpDir)" Condition="'@(_ProjectInfo->Count())' > 0" />
 
     <WriteLinesToFile File="$(ArtifactsTmpDir)/$(MSBuildProjectName).testenumeration.json"
                       Lines="$(_EnumerationJson)"
                       Overwrite="true"
-                      Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0" />
+                      Condition="'@(_ProjectInfo->Count())' > 0" />
 
     <!-- Log what we're doing -->
     <Message Text="Generated test enumeration for $(MSBuildProjectName) -> $(_ShortName) (RunOnGithubActions=%(_ProjectInfo.RunTestsOnGithubActions), SplitTests=%(_ProjectInfo.SplitTests), HasTestMetadata=$(_HasTestMetadata))"
              Importance="high"
-             Condition="'$(_ShouldSkipProject)' != 'true' and '@(_ProjectInfo->Count())' > 0" />
-
-    <Message Text="Skipped test enumeration for $(MSBuildProjectName) (excluded project)"
-             Importance="high"
-             Condition="'$(_ShouldSkipProject)' == 'true'" />
+             Condition="'@(_ProjectInfo->Count())' > 0" />
   </Target>
 
 </Project>
