@@ -6,7 +6,7 @@
   Determines splitting mode by extracting Collection and Trait attributes from the test assembly:
     - Uses ExtractTestPartitions tool to find [Collection("name")] or [Trait("Partition", "name")] attributes
     - If partitions found → partition mode (collections)
-    - Else → class mode
+    - Else → class mode (runs --list-tests to enumerate classes)
   Outputs a .tests.list file with either:
     collection:Name
     ...
@@ -17,11 +17,12 @@
 
   Also updates the per-project metadata JSON with mode and collections.
 
-.PARAMETER TestAssemblyOutputFile
-  Path to a temporary file containing the raw --list-tests output (one line per entry).
-
 .PARAMETER TestAssemblyPath
   Path to the test assembly DLL for extracting partition attributes.
+
+.PARAMETER RunCommand
+  The command to run the test assembly (e.g., "dotnet exec <assembly>").
+  Only invoked if partition extraction fails and class-based splitting is needed.
 
 .PARAMETER TestClassNamesPrefix
   Namespace prefix used to recognize test classes (e.g. Aspire.Templates.Tests).
@@ -41,15 +42,16 @@
 .NOTES
   PowerShell 7+
   Fails fast if zero test classes discovered when in class mode.
+  Optimized to only run --list-tests when partition extraction fails.
 #>
 
 [CmdletBinding()]
 param(
   [Parameter(Mandatory=$true)]
-  [string]$TestAssemblyOutputFile,
+  [string]$TestAssemblyPath,
 
   [Parameter(Mandatory=$true)]
-  [string]$TestAssemblyPath,
+  [string]$RunCommand,
 
   [Parameter(Mandatory=$true)]
   [string]$TestClassNamesPrefix,
@@ -70,11 +72,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-if (-not (Test-Path $TestAssemblyOutputFile)) {
-  Write-Error "TestAssemblyOutputFile not found: $TestAssemblyOutputFile"
+if (-not (Test-Path $TestAssemblyPath)) {
+  Write-Error "TestAssemblyPath not found: $TestAssemblyPath"
 }
-
-$raw = Get-Content -LiteralPath $TestAssemblyOutputFile -ErrorAction Stop
 
 $collections = [System.Collections.Generic.HashSet[string]]::new()
 $classes     = [System.Collections.Generic.HashSet[string]]::new()
@@ -133,18 +133,7 @@ finally {
   }
 }
 
-# Extract class names from test listing
-$classNamePattern = '^(\s*)' + [Regex]::Escape($TestClassNamesPrefix) + '\.([^\.]+)\.'
-
-foreach ($line in $raw) {
-  # Extract class name from test name
-  # Format: "  Namespace.ClassName.MethodName(...)" or "Namespace.ClassName.MethodName"
-  if ($line -match $classNamePattern) {
-    $className = "$TestClassNamesPrefix.$($Matches[2])"
-    $classes.Add($className) | Out-Null
-  }
-}
-
+# Apply collection filtering
 $skipList = @()
 if ($TestCollectionsToSkip) {
   $skipList = $TestCollectionsToSkip -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
@@ -152,10 +141,36 @@ if ($TestCollectionsToSkip) {
 
 $filteredCollections = @($collections | Where-Object { $skipList -notcontains $_ })
 
+# Determine mode: if we have partitions, use collection mode; otherwise fall back to class mode
 $mode = if ($filteredCollections.Count -gt 0) { 'collection' } else { 'class' }
 
-if ($classes.Count -eq 0 -and $mode -eq 'class') {
-  Write-Error "No test classes discovered matching prefix '$TestClassNamesPrefix'."
+# Only run --list-tests if we need class-based splitting (no partitions found)
+if ($mode -eq 'class') {
+  Write-Host "No partitions found. Running --list-tests to extract class names..."
+
+  # Run the test assembly with --list-tests to get all test names
+  $testOutput = & $RunCommand --filter-not-trait category=failing --list-tests 2>&1
+
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Test listing command failed with exit code $LASTEXITCODE. Attempting to parse partial output..."
+  }
+
+  # Extract class names from test listing
+  $classNamePattern = '^(\s*)' + [Regex]::Escape($TestClassNamesPrefix) + '\.([^\.]+)\.'
+
+  foreach ($line in $testOutput) {
+    $lineStr = $line.ToString()
+    # Extract class name from test name
+    # Format: "  Namespace.ClassName.MethodName(...)" or "Namespace.ClassName.MethodName"
+    if ($lineStr -match $classNamePattern) {
+      $className = "$TestClassNamesPrefix.$($Matches[2])"
+      $classes.Add($className) | Out-Null
+    }
+  }
+
+  if ($classes.Count -eq 0) {
+    Write-Error "No test classes discovered matching prefix '$TestClassNamesPrefix'."
+  }
 }
 
 $outputDir = [System.IO.Path]::GetDirectoryName($OutputListFile)

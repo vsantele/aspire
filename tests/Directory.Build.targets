@@ -47,20 +47,15 @@
 
     <Message Text="[$(MSBuildProjectName)] Starting test metadata extraction (v3 auto-detection)..." Importance="High" />
 
-    <!-- Run test assembly to list all tests -->
-    <Exec Command="&quot;$(RunCommand)&quot; --filter-not-trait category=failing --list-tests"
-          ConsoleToMSBuild="true"
-          IgnoreExitCode="false">
-      <Output TaskParameter="ConsoleOutput" ItemName="_TestAssemblyOutput" />
-    </Exec>
-
     <PropertyGroup>
       <!-- Path to discovery helper script -->
       <_DiscoveryScriptPath>$(RepoRoot)eng\scripts\extract-test-metadata.ps1</_DiscoveryScriptPath>
 
       <!-- Output files -->
       <_TestListFile>$(TestArchiveTestsDir)$(MSBuildProjectName).tests.list</_TestListFile>
+      <_TestListFileAbs>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(_TestListFile)'))</_TestListFileAbs>
       <_MetadataFile>$(TestArchiveTestsDir)$(MSBuildProjectName).tests.metadata.json</_MetadataFile>
+      <_MetadataFileAbs>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(_MetadataFile)'))</_MetadataFileAbs>
 
       <!-- Normalize path separators for cross-platform compatibility -->
       <_RelativeProjectPath>$(MSBuildProjectDirectory.Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
@@ -73,15 +68,6 @@
 
     <!-- Ensure output directory exists -->
     <MakeDir Directories="$(TestArchiveTestsDir)" />
-
-    <!-- Create temporary file with test assembly output -->
-    <PropertyGroup>
-      <_TempOutputFile>$(TestArchiveTestsDir)$(MSBuildProjectName).tests.output.tmp</_TempOutputFile>
-    </PropertyGroup>
-
-    <WriteLinesToFile File="$(_TempOutputFile)"
-                      Lines="@(_TestAssemblyOutput)"
-                      Overwrite="true" />
 
     <!-- Write initial metadata file for the script to update -->
     <ItemGroup>
@@ -99,11 +85,11 @@
       <_InitialMetadataLines Include="}" />
     </ItemGroup>
 
-    <WriteLinesToFile File="$(_MetadataFile)"
+    <WriteLinesToFile File="$(_MetadataFileAbs)"
                       Lines="@(_InitialMetadataLines)"
                       Overwrite="true" />
 
-    <!-- Call PowerShell discovery helper -->
+    <!-- Call PowerShell discovery helper (optimized to only run list-tests when needed) -->
     <Message Text="[$(MSBuildProjectName)] Running discovery helper..." Importance="High" />
 
     <PropertyGroup>
@@ -111,12 +97,12 @@
       <_PwshCommand Condition="'$(OS)' == 'Windows_NT'">powershell</_PwshCommand>
       <_TestAssemblyPath>$(TargetDir)$(TargetFileName)</_TestAssemblyPath>
       <_DiscoveryCommand>$(_PwshCommand) -NoProfile -ExecutionPolicy Bypass -File &quot;$(_DiscoveryScriptPath)&quot;</_DiscoveryCommand>
-      <_DiscoveryCommand>$(_DiscoveryCommand) -TestAssemblyOutputFile &quot;$(_TempOutputFile)&quot;</_DiscoveryCommand>
       <_DiscoveryCommand>$(_DiscoveryCommand) -TestAssemblyPath &quot;$(_TestAssemblyPath)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -RunCommand &quot;$(RunCommand)&quot;</_DiscoveryCommand>
       <_DiscoveryCommand>$(_DiscoveryCommand) -TestClassNamesPrefix &quot;$(TestClassNamesPrefix)&quot;</_DiscoveryCommand>
       <_DiscoveryCommand Condition="'$(_CollectionsToSkip)' != ''">$(_DiscoveryCommand) -TestCollectionsToSkip &quot;$(_CollectionsToSkip)&quot;</_DiscoveryCommand>
-      <_DiscoveryCommand>$(_DiscoveryCommand) -OutputListFile &quot;$(_TestListFile)&quot;</_DiscoveryCommand>
-      <_DiscoveryCommand>$(_DiscoveryCommand) -MetadataJsonFile &quot;$(_MetadataFile)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -OutputListFile &quot;$(_TestListFileAbs)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -MetadataJsonFile &quot;$(_MetadataFileAbs)&quot;</_DiscoveryCommand>
       <_DiscoveryCommand>$(_DiscoveryCommand) -RepoRoot &quot;$(RepoRoot)&quot;</_DiscoveryCommand>
     </PropertyGroup>
 
@@ -124,12 +110,9 @@
           IgnoreExitCode="false"
           WorkingDirectory="$(RepoRoot)" />
 
-    <!-- Clean up temp file -->
-    <Delete Files="$(_TempOutputFile)" />
-
     <!-- Verify output file was created -->
-    <Error Condition="!Exists('$(_TestListFile)')"
-           Text="Discovery helper failed to generate test list file: $(_TestListFile)" />
+    <Error Condition="!Exists('$(_TestListFileAbs)')"
+           Text="Discovery helper failed to generate test list file: $(_TestListFileAbs)" />
 
     <Message Text="[$(MSBuildProjectName)] ✅ Test metadata extraction complete!" Importance="High" />
     <Message Text="[$(MSBuildProjectName)] Files: $(_TestListFile), $(_MetadataFile)" Importance="High" />

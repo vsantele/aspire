@@ -123,12 +123,11 @@
          * Location of test metadata files (for split tests)
 
     2. Aggregation Phase (this target):
-       - Calls process-test-enumeration.ps1 to:
+       - Calls build-test-matrix.ps1 to:
          * Find all .testenumeration.json files in ArtifactsTmpDir
-         * Filter by BuildOs and runOnGithubActions flag
-         * Separate regular vs split test projects
-         * Call generate-test-matrix-for-split-tests.ps1
-         * Generate combined test matrix JSON
+         * Filter by BuildOs
+         * Process both regular and split test projects
+         * Generate combined test matrix JSON in a single pass
 
     3. Output:
        - TestMatrixOutputPath: Combined JSON matrix with all test entries
@@ -154,14 +153,19 @@
       <_TestsListOutputPath Condition="'$(TestsListOutputPath)' != ''">$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestsListOutputPath)'))</_TestsListOutputPath>
       <_TestsListOutputPath Condition="'$(TestsListOutputPath)' == ''">$(ArtifactsDir)/TestsForGithubActions.list</_TestsListOutputPath>
       <_TestMatrixOutputPath Condition="'$(TestMatrixOutputPath)' != ''">$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestMatrixOutputPath)'))</_TestMatrixOutputPath>
-      <_ProcessScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'process-test-enumeration.ps1'))</_ProcessScript>
+      <_BuildMatrixScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'build-test-matrix.ps1'))</_BuildMatrixScript>
+
+      <!-- Determine current OS -->
+      <_CurrentOS Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux</_CurrentOS>
+      <_CurrentOS Condition="$([MSBuild]::IsOSPlatform('Windows'))">windows</_CurrentOS>
+      <_CurrentOS Condition="$([MSBuild]::IsOSPlatform('OSX'))">macos</_CurrentOS>
     </PropertyGroup>
 
-    <!-- Call the PowerShell script to process test enumeration files -->
-    <Exec Command="pwsh -File &quot;$(_ProcessScript)&quot; -TestsListOutputPath &quot;$(_TestsListOutputPath)&quot; -TestMatrixOutputPath &quot;$(_TestMatrixOutputPath)&quot; -ArtifactsTmpDir &quot;$(ArtifactsTmpDir)&quot; -RepoRoot &quot;$(RepoRoot)&quot;"
+    <!-- Call the consolidated PowerShell script to build the test matrix -->
+    <Exec Command="pwsh -File &quot;$(_BuildMatrixScript)&quot; -ArtifactsTmpDir &quot;$(ArtifactsTmpDir)&quot; -ArtifactsHelixDir &quot;$(ArtifactsHelixDir)&quot; -OutputMatrixFile &quot;$(_TestMatrixOutputPath)&quot; -TestsListOutputFile &quot;$(_TestsListOutputPath)&quot; -CurrentOS &quot;$(_CurrentOS)&quot;"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="TestEnumerationOutput" />
     </Exec>
-    <Message Importance="high" Text="Test enumeration completed%0D%0A%0D%0A$(TestEnumerationOutput)" />
+    <Message Importance="high" Text="Test matrix build completed%0D%0A%0D%0A$(TestEnumerationOutput)" />
   </Target>
 </Project>
