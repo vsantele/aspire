@@ -31,7 +31,7 @@ Uses matrix: fromJson(needs.setup.outputs.split_tests_matrix)
 For each matrix entry:
     - testShortName: ${{ matrix.shortname }}
     - testProjectPath: ${{ matrix.testProjectPath }}
-    - filterArg: ${{ matrix.filterArg }}
+    - extraTestArgs: ${{ matrix.extraTestArgs }}
     - requiresNugets: ${{ matrix.requiresNugets }}
     - etc.
 ```
@@ -43,9 +43,9 @@ The workflow expects these fields (all present in v3 output):
 ```yaml
 matrix:
   shortname: "Collection_DatabaseTests"  # Used for job name
-  projectName: "Aspire.Hosting.Tests"     # Used in filterArg
+  projectName: "Aspire.Hosting.Tests"     # Used in extraTestArgs
   testProjectPath: "tests/..."            # Which project to test
-  filterArg: "--filter-collection ..."    # xUnit filter
+  extraTestArgs: "--filter-collection ..."    # xUnit filter
   requiresNugets: true/false              # Download packages?
   requiresTestSdk: true/false             # Need test SDK?
   testSessionTimeout: "20m"               # Timeout
@@ -104,7 +104,7 @@ split_tests_lin / Aspire.Templates.Tests_StarterTemplateRunTests (ubuntu-latest)
 Each job:
 1. Downloads built packages (if `requiresNugets: true`)
 2. Installs test SDK (if `requiresTestSdk: true`)
-3. Runs: `dotnet test <project> ... -- <filterArg>`
+3. Runs: `dotnet test <project> ... -- <extraTestArgs>`
 4. Uploads test results
 
 **Expected Duration**: Varies by test, but should be significantly less than running all tests together
@@ -195,7 +195,7 @@ Total:                    ~25 minutes (parallel)
   ```
 - [ ] Verify filter arguments are correct:
   ```bash
-  jq '.include[] | {shortname, filterArg}' split-tests-matrix.json
+  jq '.include[] | {shortname, extraTestArgs}' split-tests-matrix.json
   ```
 
 ## Common CI Issues
@@ -227,7 +227,7 @@ Total:                    ~25 minutes (parallel)
 **Cause**: Filter argument didn't match any tests
 
 **Fix**:
-1. Check `filterArg` in matrix JSON
+1. Check `extraTestArgs` in matrix JSON
 2. Verify collection/class names match actual test code
 3. Check `TestClassNamesPrefix` matches namespace
 

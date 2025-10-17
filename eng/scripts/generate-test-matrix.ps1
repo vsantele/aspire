@@ -18,7 +18,7 @@
     name
     fullClassName (class mode only)
     testProjectPath
-    filterArg
+    extraTestArgs
     requiresNugets
     requiresTestSdk
     enablePlaywrightInstall
@@ -84,7 +84,7 @@ function New-EntryCollection($c,$meta) {
     name = $c
     shortname = "${projectShortName}_$c"
     testProjectPath = $meta.testProjectPath
-    filterArg = "--filter-trait `"Partition=$c`""
+    extraTestArgs = "--filter-trait `"Partition=$c`""
     requiresNugets = ($meta.requiresNugets -eq 'true')
     requiresTestSdk = ($meta.requiresTestSdk -eq 'true')
     enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
@@ -104,7 +104,7 @@ function New-EntryUncollected($collections,$meta) {
     name = 'UncollectedTests'
     shortname = 'Uncollected'
     testProjectPath = $meta.testProjectPath
-    filterArg = ($filters -join ' ')
+    extraTestArgs = ($filters -join ' ')
     requiresNugets = ($meta.requiresNugets -eq 'true')
     requiresTestSdk = ($meta.requiresTestSdk -eq 'true')
     enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
@@ -126,7 +126,7 @@ function New-EntryClass($full,$meta) {
     shortname = $short
     fullClassName = $full
     testProjectPath = $meta.testProjectPath
-    filterArg = "--filter-class `"$full`""
+    extraTestArgs = "--filter-class `"$full`""
     requiresNugets = ($meta.requiresNugets -eq 'true')
     requiresTestSdk = ($meta.requiresTestSdk -eq 'true')
     enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
@@ -142,7 +142,7 @@ function New-EntryRegular($shortName) {
     name = $shortName
     shortname = $shortName
     testProjectPath = "tests/Aspire.$shortName.Tests/Aspire.$shortName.Tests.csproj"
-    filterArg = ""
+    extraTestArgs = ""
     requiresNugets = $false
     requiresTestSdk = $false
     enablePlaywrightInstall = $false

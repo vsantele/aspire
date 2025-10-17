@@ -44,7 +44,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.filterArg }}"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
@@ -64,7 +64,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.filterArg }}"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
@@ -84,7 +84,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.filterArg }}"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
@@ -104,7 +104,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.filterArg }}"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
@@ -124,7 +124,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.filterArg }}"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
@@ -144,7 +144,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       testSessionTimeout: ${{ matrix.testSessionTimeout }}
       testHangTimeout: ${{ matrix.testHangTimeout }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.filterArg }}"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       requiresNugets: ${{ matrix.requiresNugets }}
       requiresTestSdk: ${{ matrix.requiresTestSdk }}
