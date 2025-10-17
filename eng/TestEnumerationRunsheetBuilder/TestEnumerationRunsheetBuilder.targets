@@ -67,9 +67,9 @@
       <_CurrentProject Include="$(MSBuildProjectFullPath)" />
     </ItemGroup>
 
+    <!-- Get OS compatibility for this test project -->
     <MSBuild Projects="@(_CurrentProject)"
-             Properties="BuildOs=$(BuildOs)"
-             Targets="GetRunTestsOnGithubActions">
+             Targets="GetTestOSCompatibility">
       <Output TaskParameter="TargetOutputs" ItemName="_ProjectInfo" />
     </MSBuild>
 
@@ -98,14 +98,16 @@
       <_HasTestMetadata Condition="Exists('$(_MetadataFile)')">true</_HasTestMetadata>
       <_HasTestMetadata Condition="'$(_HasTestMetadata)' != 'true'">false</_HasTestMetadata>
 
+      <!-- Build OS arrays from semicolon-separated values -->
+      <_OsArrayJson>%(_ProjectInfo.SupportedOSes)</_OsArrayJson>
+
       <!-- Build enumeration JSON -->
       <_EnumerationJson>{
   "project": "$(MSBuildProjectName)",
   "fullPath": "$(_RelativeProjectPath)",
   "shortName": "$(_ShortName)",
-  "runOnGithubActions": "%(_ProjectInfo.RunTestsOnGithubActions)",
+  "supportedOSes": [$(_OsArrayJson)],
   "splitTests": "%(_ProjectInfo.SplitTests)",
-  "buildOs": "$(BuildOs)",
   "hasTestMetadata": "$(_HasTestMetadata)",
   "testListFile": "$(_TestListFile.Replace('$(RepoRoot)', ''))",
   "metadataFile": "$(_MetadataFile.Replace('$(RepoRoot)', ''))"
@@ -121,7 +123,7 @@
                       Condition="'@(_ProjectInfo->Count())' > 0" />
 
     <!-- Log what we're doing -->
-    <Message Text="Generated test enumeration for $(MSBuildProjectName) -> $(_ShortName) (RunOnGithubActions=%(_ProjectInfo.RunTestsOnGithubActions), SplitTests=%(_ProjectInfo.SplitTests), HasTestMetadata=$(_HasTestMetadata))"
+    <Message Text="Generated test enumeration for $(MSBuildProjectName) -> $(_ShortName) (OSes=%(_ProjectInfo.SupportedOSes), SplitTests=%(_ProjectInfo.SplitTests), HasTestMetadata=$(_HasTestMetadata))"
              Importance="high"
              Condition="'@(_ProjectInfo->Count())' > 0" />
   </Target>

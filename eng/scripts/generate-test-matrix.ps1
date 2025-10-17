@@ -42,9 +42,6 @@ param(
   [Parameter(Mandatory=$true)]
   [string]$OutputDirectory,
   [Parameter(Mandatory=$false)]
-  [ValidateSet('windows','linux','darwin','')]
-  [string]$BuildOs = '',
-  [Parameter(Mandatory=$false)]
   [string]$RegularTestProjectsFile = ''
 )
 
@@ -63,6 +60,7 @@ function Read-Metadata($file, $projectName) {
     testHangTimeout = '10m'
     uncollectedTestsSessionTimeout = '15m'
     uncollectedTestsHangTimeout = '10m'
+    supportedOSes = @('windows', 'linux', 'macos')
   }
   if (-not (Test-Path $file)) { return $defaults }
   try {
@@ -71,7 +69,7 @@ function Read-Metadata($file, $projectName) {
       $defaults[$k] = $json.$k
     }
   } catch {
-    Write-Warning "Failed parsing metadata for ${projectName}: $_"
+    throw "Failed parsing metadata for ${projectName}: $_"
   }
   return $defaults
 }
@@ -90,6 +88,7 @@ function New-EntryCollection($c,$meta) {
     enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
     testSessionTimeout = $meta.testSessionTimeout
     testHangTimeout = $meta.testHangTimeout
+    supportedOSes = $meta.supportedOSes
   }
 }
 
@@ -110,6 +109,7 @@ function New-EntryUncollected($collections,$meta) {
     enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
     testSessionTimeout = ($meta.uncollectedTestsSessionTimeout ?? $meta.testSessionTimeout)
     testHangTimeout = ($meta.uncollectedTestsHangTimeout ?? $meta.testHangTimeout)
+    supportedOSes = $meta.supportedOSes
   }
 }
 
@@ -132,6 +132,7 @@ function New-EntryClass($full,$meta) {
     enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
     testSessionTimeout = $meta.testSessionTimeout
     testHangTimeout = $meta.testHangTimeout
+    supportedOSes = $meta.supportedOSes
   }
 }
 
@@ -148,12 +149,12 @@ function New-EntryRegular($shortName) {
     enablePlaywrightInstall = $false
     testSessionTimeout = '20m'
     testHangTimeout = '10m'
+    supportedOSes = @('windows', 'linux', 'macos')
   }
 }
 
 if (-not (Test-Path $TestListsDirectory)) {
-  Write-Warning "Test lists directory not found: $TestListsDirectory"
-  exit 0
+  throw "Test lists directory not found: $TestListsDirectory"
 }
 
 $listFiles = @(Get-ChildItem -Path $TestListsDirectory -Filter '*.tests.list' -Recurse -ErrorAction SilentlyContinue)
@@ -231,6 +232,7 @@ if ($RegularTestProjectsFile -and (Test-Path $RegularTestProjectsFile)) {
           enablePlaywrightInstall = 'false'
           testSessionTimeout = '20m'
           testHangTimeout = '10m'
+          supportedOSes = ($proj.supportedOSes ?? @('windows', 'linux', 'macos'))
         }
         Write-Host "  Using default metadata for $($proj.project) (no metadata file found at $metadataFile)"
       }
@@ -247,6 +249,7 @@ if ($RegularTestProjectsFile -and (Test-Path $RegularTestProjectsFile)) {
         enablePlaywrightInstall = ($meta.enablePlaywrightInstall -eq 'true')
         testSessionTimeout = $meta.testSessionTimeout
         testHangTimeout = $meta.testHangTimeout
+        supportedOSes = ($proj.supportedOSes ?? $meta.supportedOSes)
       }
       $entries.Add($entry) | Out-Null
     }

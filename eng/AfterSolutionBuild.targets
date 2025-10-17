@@ -151,8 +151,6 @@
 
     <PropertyGroup>
       <!-- Set default values if not provided -->
-      <_BuildOs Condition="'$(BuildOs)' == ''">linux</_BuildOs>
-      <_BuildOs Condition="'$(BuildOs)' != ''">$(BuildOs)</_BuildOs>
       <_TestsListOutputPath Condition="'$(TestsListOutputPath)' != ''">$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestsListOutputPath)'))</_TestsListOutputPath>
       <_TestsListOutputPath Condition="'$(TestsListOutputPath)' == ''">$(ArtifactsDir)/TestsForGithubActions.list</_TestsListOutputPath>
       <_TestMatrixOutputPath Condition="'$(TestMatrixOutputPath)' != ''">$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestMatrixOutputPath)'))</_TestMatrixOutputPath>
@@ -160,7 +158,7 @@
     </PropertyGroup>
 
     <!-- Call the PowerShell script to process test enumeration files -->
-    <Exec Command="pwsh -File &quot;$(_ProcessScript)&quot; -BuildOs &quot;$(_BuildOs)&quot; -TestsListOutputPath &quot;$(_TestsListOutputPath)&quot; -TestMatrixOutputPath &quot;$(_TestMatrixOutputPath)&quot; -ArtifactsTmpDir &quot;$(ArtifactsTmpDir)&quot; -RepoRoot &quot;$(RepoRoot)&quot;"
+    <Exec Command="pwsh -File &quot;$(_ProcessScript)&quot; -TestsListOutputPath &quot;$(_TestsListOutputPath)&quot; -TestMatrixOutputPath &quot;$(_TestMatrixOutputPath)&quot; -ArtifactsTmpDir &quot;$(ArtifactsTmpDir)&quot; -RepoRoot &quot;$(RepoRoot)&quot;"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="TestEnumerationOutput" />
     </Exec>

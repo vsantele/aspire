@@ -1,10 +1,7 @@
 #!/usr/bin/env pwsh
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$BuildOs,
-
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$TestsListOutputPath,
 
     [Parameter(Mandatory=$false)]
@@ -17,7 +14,7 @@ param(
     [string]$RepoRoot
 )
 
-Write-Host "Processing test enumeration files for BuildOs: $BuildOs"
+Write-Host "Processing test enumeration files"
 Write-Host "TestsListOutputPath: $TestsListOutputPath"
 Write-Host "TestMatrixOutputPath: $TestMatrixOutputPath"
 Write-Host "ArtifactsTmpDir: $ArtifactsTmpDir"
@@ -65,17 +62,18 @@ foreach ($file in $enumerationFiles) {
     try {
         $content = Get-Content -Raw $file.FullName | ConvertFrom-Json
 
-        # Filter by BuildOs and eligibility
-        if ($content.buildOs -eq $BuildOs -and $content.runOnGithubActions -eq 'true') {
+        # Include all test projects that support at least one OS
+        if ($content.supportedOSes -and $content.supportedOSes.Count -gt 0) {
             if ($content.splitTests -eq 'true') {
                 $splitTestProjects += $content.shortName
             } else {
                 # Store full enumeration data for regular tests
                 $regularTestProjects += $content
             }
-            Write-Host "  Included: $($content.shortName) (Split: $($content.splitTests))"
+            $osesStr = $content.supportedOSes -join ', '
+            Write-Host "  Included: $($content.shortName) (OSes: $osesStr, Split: $($content.splitTests))"
         } else {
-            Write-Host "  Excluded: $($content.shortName) (BuildOs: $($content.buildOs), RunOnGithubActions: $($content.runOnGithubActions))"
+            Write-Host "  Excluded: $($content.shortName) (No supported OSes)"
         }
     }
     catch {
@@ -119,7 +117,7 @@ New-Item -Path $tempMatrixDir -ItemType Directory -Force | Out-Null
 $matrixScriptPath = Join-Path $RepoRoot 'eng/scripts/generate-test-matrix.ps1'
 $testListsDir = Join-Path (Split-Path $TestsListOutputPath -Parent) 'helix'
 Write-Host "Calling matrix generation script..."
-& $matrixScriptPath -TestListsDirectory $testListsDir -OutputDirectory $tempMatrixDir -BuildOs $BuildOs -RegularTestProjectsFile $TestsListOutputPath
+& $matrixScriptPath -TestListsDirectory $testListsDir -OutputDirectory $tempMatrixDir -RegularTestProjectsFile $TestsListOutputPath
 
 # Copy the generated matrix file to the expected location
 $generatedMatrixFile = Join-Path $tempMatrixDir 'combined-tests-matrix.json'
