@@ -80,7 +80,8 @@ function New-RegularTestEntry {
 
   $entry = [ordered]@{
     type = 'regular'
-    project = $Enumeration.project
+    projectName = $Enumeration.project
+    name = $Enumeration.shortName
     shortname = $Enumeration.shortName
     testProjectPath = $Enumeration.fullPath
     workitemprefix = $Enumeration.project
@@ -93,6 +94,7 @@ function New-RegularTestEntry {
     if ($Metadata.requiresNugets -eq 'true') { $entry['requiresNugets'] = 'true' }
     if ($Metadata.requiresTestSdk -eq 'true') { $entry['requiresTestSdk'] = 'true' }
     if ($Metadata.enablePlaywrightInstall -eq 'true') { $entry['enablePlaywrightInstall'] = 'true' }
+    if ($Metadata.extraTestArgs) { $entry['extraTestArgs'] = $Metadata.extraTestArgs }
   }
 
   # Add supported OSes
@@ -117,7 +119,8 @@ function New-CollectionTestEntry {
 
   $entry = [ordered]@{
     type = 'collection'
-    project = $Metadata.projectName
+    projectName = $Metadata.projectName
+    name = if ($IsUncollected) { "$baseShortName-$suffix" } else { "$baseShortName-$suffix" }
     shortname = if ($IsUncollected) { "$baseShortName-$suffix" } else { "$baseShortName-$suffix" }
     testProjectPath = $Metadata.testProjectPath
     workitemprefix = "$($Metadata.projectName)_$suffix"
@@ -176,7 +179,8 @@ function New-ClassTestEntry {
 
   $entry = [ordered]@{
     type = 'class'
-    project = $Metadata.projectName
+    projectName = $Metadata.projectName
+    name = "$baseShortName-$shortClassName"
     shortname = "$baseShortName-$shortClassName"
     testProjectPath = $Metadata.testProjectPath
     workitemprefix = "$($Metadata.projectName)_$shortClassName"
