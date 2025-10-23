@@ -29,6 +29,31 @@ internal class Publisher(
             );
         }
 
+        // Add a step to display the target environment when deploying
+        if (options.Value.Deploy)
+        {
+            var environmentStep = await progressReporter.CreateStepAsync(
+                "display-environment",
+                cancellationToken).ConfigureAwait(false);
+
+            await using (environmentStep.ConfigureAwait(false))
+            {
+                var hostEnvironment = serviceProvider.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>();
+                var environmentName = hostEnvironment?.EnvironmentName ?? "Production";
+
+                var environmentTask = await environmentStep.CreateTaskAsync(
+                    $"Discovering target environment",
+                    cancellationToken)
+                    .ConfigureAwait(false);
+
+                await environmentTask.CompleteAsync(
+                    $"Deploying to environment: {environmentName.ToLowerInvariant()}",
+                    CompletionState.Completed,
+                    cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
         // Check if --clear-cache flag is set and prompt user before deleting deployment state
         if (options.Value.Deploy && options.Value.ClearCache)
         {
@@ -158,9 +183,33 @@ internal class Publisher(
             var deployingContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken, options.Value.OutputPath is not null ?
                 Path.GetFullPath(options.Value.OutputPath) : null);
 
-            // Execute the pipeline - it will collect steps from PipelineStepAnnotation on resources
-            var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>();
-            await pipeline.ExecuteAsync(deployingContext).ConfigureAwait(false);
+            try
+            {
+                var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>();
+                await pipeline.ExecuteAsync(deployingContext).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                var errorStep = await progressReporter.CreateStepAsync(
+                    "pipeline-validation",
+                    cancellationToken).ConfigureAwait(false);
+
+                await using (errorStep.ConfigureAwait(false))
+                {
+                    var errorTask = await errorStep.CreateTaskAsync(
+                        "Validating pipeline configuration",
+                        cancellationToken)
+                        .ConfigureAwait(false);
+
+                    await errorTask.CompleteAsync(
+                        ex.Message,
+                        CompletionState.CompletedWithError,
+                        cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                throw;
+            }
         }
         else
         {

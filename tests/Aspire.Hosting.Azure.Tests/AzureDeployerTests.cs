@@ -5,10 +5,12 @@
 #pragma warning disable ASPIRECOMPUTE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPUBLISHERS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Tests;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Publishing.Internal;
 using Aspire.Hosting.Testing;
@@ -68,6 +70,22 @@ public class AzureDeployerTests(ITestOutputHelper output)
         var runTask = Task.Run(app.Run);
 
         // Wait for the first interaction (subscription selection)
+        var tenantInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
+        Assert.Equal("Azure tenant", tenantInteraction.Title);
+        Assert.False(tenantInteraction.Options!.EnableMessageMarkdown);
+
+        Assert.Collection(tenantInteraction.Inputs,
+            input =>
+            {
+                Assert.Equal("Tenant ID", input.Label);
+                Assert.Equal(InputType.Choice, input.InputType);
+                Assert.True(input.Required);
+            });
+
+        tenantInteraction.Inputs[0].Value = "87654321-4321-4321-4321-210987654321";
+        tenantInteraction.CompletionTcs.SetResult(InteractionResult.Ok(tenantInteraction.Inputs));
+
+        // Wait for the next interaction (subscription selection)
         var subscriptionInteraction = await testInteractionService.Interactions.Reader.ReadAsync();
         Assert.Equal("Azure subscription", subscriptionInteraction.Title);
         Assert.False(subscriptionInteraction.Options!.EnableMessageMarkdown);
@@ -112,6 +130,75 @@ public class AzureDeployerTests(ITestOutputHelper output)
 
         // Wait for the run task to complete (or timeout)
         await runTask.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>
+    /// Verifies that deploying an application with resources that define their own build steps does not trigger default
+    /// image build and they have the correct pipeline configuration.
+    /// </summary>
+    [Fact]
+    public async Task DeployAsync_WithResourcesWithBuildSteps()
+    {
+        // Arrange
+        var mockProcessRunner = new MockProcessRunner();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, publisher: "default", isDeploy: true);
+        var armClientProvider = new TestArmClientProvider(new Dictionary<string, object>
+        {
+            ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
+            ["AZURE_CONTAINER_REGISTRY_ENDPOINT"] = new { type = "String", value = "testregistry.azurecr.io" },
+            ["AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID"] = new { type = "String", value = "/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity" },
+            ["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = new { type = "String", value = "test.westus.azurecontainerapps.io" },
+            ["AZURE_CONTAINER_APPS_ENVIRONMENT_ID"] = new { type = "String", value = "/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.App/managedEnvironments/testenv" }
+        });
+        ConfigureTestServices(builder, armClientProvider: armClientProvider);
+
+        var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
+
+        var configCalled = false;
+
+        // Add a compute resource with its own build step
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithPipelineStepFactory(factoryContext =>
+            {
+                return
+                [
+                    new PipelineStep
+                    {
+                        Name = "api-build",
+                        Action = _ => Task.CompletedTask,
+                        Tags = [WellKnownPipelineTags.BuildCompute]
+                    }
+                ];
+            })
+            .WithPipelineConfiguration(configContext =>
+            {
+                var mainBuildStep = configContext.GetSteps(WellKnownPipelineTags.BuildCompute)
+                    .Where(s => s.Name == "build-container-images")
+                    .Single();
+
+                Assert.Contains("api-build", mainBuildStep.DependsOnSteps);
+
+                var apiBuildstep = configContext.GetSteps(WellKnownPipelineTags.BuildCompute)
+                    .Where(s => s.Name == "api-build")
+                    .Single();
+
+                Assert.Contains("default-image-tags", apiBuildstep.DependsOnSteps);
+
+                configCalled = true;
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
+
+        Assert.True(configCalled);
+
+        // Assert - Verify MockImageBuilder was NOT called because the project resource has its own build step
+        var mockImageBuilder = app.Services.GetRequiredService<IResourceContainerImageBuilder>() as MockImageBuilder;
+        Assert.NotNull(mockImageBuilder);
+        Assert.False(mockImageBuilder.BuildImageCalled);
+        Assert.False(mockImageBuilder.BuildImagesCalled);
+        Assert.Empty(mockImageBuilder.BuildImageResources);
     }
 
     [Fact]
@@ -586,7 +673,7 @@ public class AzureDeployerTests(ITestOutputHelper output)
 
         // Assert that deploying steps executed
         Assert.Contains("deploy-compute", mockActivityReporter.CreatedSteps);
-        Assert.Contains(("deploy-compute", "Deploying cache"), mockActivityReporter.CreatedTasks);
+        Assert.Contains(("deploy-compute", "Deploying **cache**"), mockActivityReporter.CreatedTasks);
     }
 
     [Fact]
@@ -888,9 +975,10 @@ public class AzureDeployerTests(ITestOutputHelper output)
     {
         public string? StateFilePath => null;
 
-        public Task<JsonObject> LoadStateAsync(CancellationToken cancellationToken = default) => Task.FromResult(new JsonObject());
+        public Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
 
-        public Task SaveStateAsync(JsonObject userSecrets, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class NoOpBicepProvisioner : IBicepProvisioner
@@ -951,13 +1039,13 @@ public class AzureDeployerTests(ITestOutputHelper output)
         var internalTask = activityReporter.CompletedTasks.FirstOrDefault(t => t.TaskStatusText.Contains("internal-api"));
         Assert.NotNull(internalTask.CompletionMessage);
         Assert.DoesNotContain("https://", internalTask.CompletionMessage);
-        Assert.Equal("Successfully deployed internal-api", internalTask.CompletionMessage);
+        Assert.Equal("Successfully deployed **internal-api**", internalTask.CompletionMessage);
 
         // Assert - Verify that container with no endpoints does NOT show URL in completion message
         var noEndpointTask = activityReporter.CompletedTasks.FirstOrDefault(t => t.TaskStatusText.Contains("worker"));
         Assert.NotNull(noEndpointTask.CompletionMessage);
         Assert.DoesNotContain("https://", noEndpointTask.CompletionMessage);
-        Assert.Equal("Successfully deployed worker", noEndpointTask.CompletionMessage);
+        Assert.Equal("Successfully deployed **worker**", noEndpointTask.CompletionMessage);
     }
 
     private sealed class Project : IProjectMetadata
@@ -1225,6 +1313,13 @@ public class AzureDeployerTests(ITestOutputHelper output)
             {
                 _reporter.CreatedTasks.Add((_title, statusText));
                 return Task.FromResult<IReportingTask>(new TestReportingTask(_reporter, statusText));
+            }
+
+            public void Log(LogLevel logLevel, string message, bool enableMarkdown)
+            {
+                // For testing purposes, we just track that Log was called
+                _ = logLevel;
+                _ = message;
             }
         }
 

@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Pipelines;
 
@@ -103,6 +104,22 @@ internal sealed class ReportingStep : IReportingStep
         }
 
         return await Reporter.CreateTaskAsync(this, statusText, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Logs a message at the specified level within this step.
+    /// </summary>
+    /// <param name="logLevel">The log level for the message.</param>
+    /// <param name="message">The message to log.</param>
+    /// <param name="enableMarkdown">The enableMarkdown</param>
+    public void Log(LogLevel logLevel, string message, bool enableMarkdown = true)
+    {
+        if (Reporter is null)
+        {
+            return;
+        }
+
+        Reporter.Log(this, logLevel, message, enableMarkdown);
     }
 
     /// <summary>

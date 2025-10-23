@@ -46,9 +46,9 @@ public sealed class PipelineStepContext
     public IServiceProvider Services => PipelineContext.Services;
 
     /// <summary>
-    /// Gets the logger for pipeline operations.
+    /// Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
     /// </summary>
-    public ILogger Logger => PipelineContext.Logger; // Review, this should be a step logger
+    public ILogger Logger => field ??= new StepLogger(ReportingStep);
 
     /// <summary>
     /// Gets the cancellation token for the pipeline operation.
@@ -59,4 +59,35 @@ public sealed class PipelineStepContext
     /// Gets the output path for deployment artifacts.
     /// </summary>
     public string? OutputPath => PipelineContext.OutputPath;
+}
+
+/// <summary>
+/// A logger that writes to the step logger.
+/// </summary>
+[Experimental("ASPIREPUBLISHERS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+internal sealed class StepLogger(IReportingStep step) : ILogger
+{
+    private readonly IReportingStep _step = step;
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return null;
+    }
+
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return true;
+    }
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        // Also log to the step logger (for publishing output display)
+        var message = formatter(state, exception);
+        if (exception != null)
+        {
+            message = $"{message} {exception}";
+        }
+
+        _step.Log(logLevel, message, enableMarkdown: false);
+    }
 }

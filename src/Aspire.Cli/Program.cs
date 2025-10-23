@@ -138,6 +138,7 @@ public class Program
         builder.Services.AddHostedService(sp => sp.GetRequiredService<NuGetPackagePrefetcher>());
         builder.Services.AddSingleton<ICliUpdateNotifier, CliUpdateNotifier>();
         builder.Services.AddSingleton<IPackagingService, PackagingService>();
+        builder.Services.AddSingleton<ICliDownloader, CliDownloader>();
         builder.Services.AddMemoryCache();
 
         // Template factories.
@@ -169,12 +170,20 @@ public class Program
         return new DirectoryInfo(hivesDirectory);
     }
 
+    private static DirectoryInfo GetSdksDirectory()
+    {
+        var homeDirectory = GetUsersAspirePath();
+        var sdksPath = Path.Combine(homeDirectory, "sdks");
+        return new DirectoryInfo(sdksPath);
+    }
+
     private static CliExecutionContext BuildCliExecutionContext(bool debugMode)
     {
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         var hivesDirectory = GetHivesDirectory();
         var cacheDirectory = GetCacheDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, debugMode);
+        var sdksDirectory = GetSdksDirectory();
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, debugMode);
     }
 
     private static DirectoryInfo GetCacheDirectory()
@@ -276,11 +285,6 @@ public class Program
                     provider.GetRequiredService<IExtensionBackchannel>(),
                     extensionPromptEnabled);
             });
-
-            // If the CLI is being launched from the aspire extension, we don't want to use the console logger that's used when including --debug.
-            // Instead, we will log to the extension backchannel.
-            builder.Logging.AddFilter("Aspire.Cli", LogLevel.Trace);
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, ExtensionLoggerProvider>());
         }
         else
         {
