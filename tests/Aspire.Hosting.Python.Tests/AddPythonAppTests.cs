@@ -965,7 +965,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var manifestPath = Path.Combine(projectDirectory, "aspire-manifest.json");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, publisher: "manifest", outputPath: outputDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
 
         // Add Python resources with different entrypoint types
         builder.AddPythonScript("script-app", projectDirectory, "main.py")
@@ -1030,7 +1030,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var manifestPath = Path.Combine(projectDirectory, "aspire-manifest.json");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, publisher: "manifest", outputPath: outputDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
 
         // Add Python resources with different entrypoint types
         builder.AddPythonScript("script-app", projectDirectory, "main.py")
