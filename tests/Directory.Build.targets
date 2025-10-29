@@ -37,15 +37,15 @@
                   Overwrite="true" />
   </Target>
 
-  <!-- Enhanced test splitting with auto-detection (v3) -->
-  <Target Name="ExtractTestClassNamesV3"
-          Condition=" '$(IsTestProject)' == 'true' and '$(SplitTestsOnCI)' == 'true' and ('$(PrepareForHelix)' == 'true' or '$(GenerateCIPartitions)' == 'true') and '$(IsTestUtilityProject)' != 'true'"
-          BeforeTargets="ZipTestArchive">
+  <!-- Enhanced test splitting with auto-detection -->
+  <Target Name="ExtractTestClassNames"
+          BeforeTargets="ZipTestArchive"
+          Condition=" '$(IsTestProject)' == 'true' and '$(SplitTestsOnCI)' == 'true' and ('$(PrepareForHelix)' == 'true' or '$(GenerateCIPartitions)' == 'true') and '$(IsTestUtilityProject)' != 'true'">
 
     <Error Condition="'$(TestClassNamesPrefix)' == ''"
            Text="%24(TestClassNamesPrefix) must be set when SplitTestsOnCI=true. Example: -p:TestClassNamesPrefix=Aspire.Hosting.Tests" />
 
-    <Message Text="[$(MSBuildProjectName)] Starting test metadata extraction (v3 auto-detection)..." Importance="High" />
+    <Message Text="[$(MSBuildProjectName)] Starting test metadata extraction with auto-detection..." Importance="High" />
 
     <PropertyGroup>
       <!-- Path to discovery helper script -->

@@ -76,7 +76,7 @@
     <!-- Build all test projects to generate test metadata (needed for requiresNugets, requiresTestSdk, etc.) -->
     <MSBuild Projects="@(_CurrentProject)"
              Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
-             Targets="Build;ExtractTestClassNamesV3;WriteTestMetadata"
+             Targets="Build;ExtractTestClassNames;WriteTestMetadata"
              Condition="'@(_ProjectInfo->Count())' > 0 and '%(_ProjectInfo.SplitTests)' == 'true'" />
 
     <MSBuild Projects="@(_CurrentProject)"

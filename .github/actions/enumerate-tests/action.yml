@@ -39,7 +39,6 @@ runs:
         /p:TestRunnerName=TestEnumerationRunsheetBuilder
         /p:TestsListOutputPath=artifacts/TestsForGithubActions.list
         /p:TestMatrixOutputPath=artifacts/combined-test-matrix.json
-        /p:BuildOs=${{ runner.os == 'Linux' && 'linux' || runner.os == 'macOS' && 'darwin' || 'windows' }}
         -p:GenerateCIPartitions=true
         -bl
 
@@ -61,9 +60,13 @@ runs:
             supportedOSes = @('windows', 'linux', 'macos')
           }
 
+          # Valid OS values for validation
+          $validOSes = @('windows', 'linux', 'macos')
+
           # Split tests based on requiresNugets property and expand by OS
           $testsRequiringNugets = @()
           $testsNotRequiringNugets = @()
+          $partitionExtractionWarnings = @()
 
           foreach ($test in $matrixContent.include) {
             # Apply defaults for missing properties
@@ -78,6 +81,18 @@ runs:
               $test.supportedOSes
             } else {
               $defaults.supportedOSes
+            }
+
+            # Validate supported OSes
+            foreach ($os in $supportedOSes) {
+              if ($os -notin $validOSes) {
+                Write-Warning "Invalid OS '$os' in supportedOSes for test '$($test.name)'. Valid values: $($validOSes -join ', ')"
+              }
+            }
+
+            # Check for partition extraction failures
+            if ($test.PSObject.Properties.Name.Contains('partitionExtractionFailed') -and $test.partitionExtractionFailed -eq $true) {
+              $partitionExtractionWarnings += "Test '$($test.projectName)' fell back to class-based splitting (partition extraction failed)"
             }
 
             # Expand test entry for each supported OS
@@ -129,6 +144,15 @@ runs:
           Write-Host "Combined test matrices generated successfully"
           Write-Host "Tests requiring nugets: $($testsRequiringNugets.Count)"
           Write-Host "Tests not requiring nugets: $($testsNotRequiringNugets.Count)"
+
+          # Display partition extraction warnings
+          if ($partitionExtractionWarnings.Count -gt 0) {
+            Write-Host ""
+            Write-Warning "Partition extraction warnings:"
+            foreach ($warning in $partitionExtractionWarnings) {
+              Write-Warning "  - $warning"
+            }
+          }
         } else {
           # Empty matrices if no combined matrix found
           $emptyMatrix = '{"include":[]}'

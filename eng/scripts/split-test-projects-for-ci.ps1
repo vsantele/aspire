@@ -201,6 +201,11 @@ if ($MetadataJsonFile -and (Test-Path $MetadataJsonFile)) {
     $meta | Add-Member -Force -MemberType NoteProperty -Name 'collections' -Value @($filteredCollections | Sort-Object)
     $meta | Add-Member -Force -MemberType NoteProperty -Name 'classCount' -Value $classes.Count
     $meta | Add-Member -Force -MemberType NoteProperty -Name 'collectionCount' -Value $filteredCollections.Count
+
+    # Track if partition extraction failed (fell back to class mode unexpectedly)
+    $partitionExtractionFailed = ($mode -eq 'class' -and $collections.Count -eq 0 -and (Test-Path $toolPath))
+    $meta | Add-Member -Force -MemberType NoteProperty -Name 'partitionExtractionFailed' -Value $partitionExtractionFailed
+
     $meta | ConvertTo-Json -Depth 20 | Set-Content -Path $MetadataJsonFile -Encoding UTF8
   } catch {
     Write-Warning "Failed updating metadata JSON: $_"
