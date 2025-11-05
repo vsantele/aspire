@@ -4,6 +4,8 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREPIPELINES004
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Diagnostics;
 using System.Reflection;
@@ -22,7 +24,9 @@ using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,7 +35,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.SecretManager.Tools.Internal;
 
 namespace Aspire.Hosting;
 
@@ -61,6 +64,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
     private readonly DistributedApplicationOptions _options;
     private readonly HostApplicationBuilder _innerBuilder;
+    private readonly IUserSecretsManager _userSecretsManager;
 
     /// <inheritdoc />
     public IHostEnvironment Environment => _innerBuilder.Environment;
@@ -285,6 +289,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         // Core things
+        // Create and register the user secrets manager
+        _userSecretsManager = UserSecretsManagerFactory.Instance.GetOrCreate(AppHostAssembly);
+        // Always register IUserSecretsManager so dependencies can resolve
+        _innerBuilder.Services.AddSingleton(_userSecretsManager);
+        
         _innerBuilder.Services.AddSingleton(sp => new DistributedApplicationModel(Resources));
         _innerBuilder.Services.AddSingleton<PipelineExecutor>();
         _innerBuilder.Services.AddHostedService<PipelineExecutor>(sp => sp.GetRequiredService<PipelineExecutor>());
@@ -324,7 +333,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             return new AspireStore(Path.Combine(aspireDir, ".aspire"));
         });
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<IDeveloperCertificateService, DeveloperCertificateService>();
+#pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         // Shared DCP things (even though DCP isn't used in 'publish' and 'inspect' mode
         // we still honour the DCP options around container runtime selection.
@@ -351,13 +362,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                     // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
                     // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
                     // of persistent containers (as a new key would be a spec change).
-                    SecretsStore.GetOrSetUserSecret(_innerBuilder.Configuration, AppHostAssembly, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
+                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
 
                     // Set a random API key for the MCP Server if one isn't already present in configuration.
                     // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
                     // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
                     // of MCP clients.
-                    SecretsStore.GetOrSetUserSecret(_innerBuilder.Configuration, AppHostAssembly, "AppHost:McpApiKey", TokenGenerator.GenerateToken);
+                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:McpApiKey", TokenGenerator.GenerateToken);
 
                     // Determine the frontend browser token.
                     if (_innerBuilder.Configuration.GetString(KnownConfigNames.DashboardFrontendBrowserToken,
@@ -462,12 +473,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<IResourceContainerImageBuilder, ResourceContainerImageBuilder>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());
+        _innerBuilder.Services.AddSingleton<IPipelineOutputService, PipelineOutputService>();
         _innerBuilder.Services.AddSingleton(Pipeline);
 
         // Configure pipeline logging options
-        _innerBuilder.Services.Configure<PipelineLoggingOptions>(o =>
+        _innerBuilder.Services.Configure<PipelineLoggingOptions>(options =>
         {
-            o.MinimumLogLevel = _innerBuilder.Configuration["Pipeline:LogLevel"]?.ToLowerInvariant() switch
+            var config = _innerBuilder.Configuration;
+
+            options.MinimumLogLevel = config["Pipeline:LogLevel"]?.ToLowerInvariant() switch
             {
                 "trace" => LogLevel.Trace,
                 "debug" => LogLevel.Debug,
@@ -477,6 +491,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 "crit" or "critical" => LogLevel.Critical,
                 _ => LogLevel.Information
             };
+
+            options.IncludeExceptionDetails = config.GetBool("Pipeline:IncludeExceptionDetails") ?? false;
         });
 
         _innerBuilder.Services.AddSingleton<ILoggerProvider, PipelineLoggerProvider>();
@@ -490,11 +506,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Register IDeploymentStateManager based on execution context
         if (ExecutionContext.IsPublishMode)
         {
-            _innerBuilder.Services.TryAddSingleton<IDeploymentStateManager, Publishing.Internal.FileDeploymentStateManager>();
+            _innerBuilder.Services.TryAddSingleton<IDeploymentStateManager, FileDeploymentStateManager>();
         }
         else
         {
-            _innerBuilder.Services.TryAddSingleton<IDeploymentStateManager, Publishing.Internal.UserSecretsDeploymentStateManager>();
+            _innerBuilder.Services.TryAddSingleton<IDeploymentStateManager, UserSecretsDeploymentStateManager>();
         }
 
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.ExcludeDashboardFromManifestAsync);
@@ -576,17 +592,26 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     {
         var switchMappings = new Dictionary<string, string>()
         {
+            // Legacy mappings for backward compatibility
             { "--operation", "AppHost:Operation" },
             { "--publisher", "Publishing:Publisher" },
+
+            // Pipeline options (valid for aspire do based commands)
+            { "--step", "Pipeline:Step" },
             { "--output-path", "Pipeline:OutputPath" },
             { "--log-level", "Pipeline:LogLevel" },
+            { "--include-exception-details", "Pipeline:IncludeExceptionDetails" },
+
+            // TODO: Rename this to something related to deployment state
             { "--clear-cache", "Pipeline:ClearCache" },
-            { "--step", "Pipeline:Step" },
+
+            // DCP Publisher options, we should only process these in run mode
             { "--dcp-cli-path", "DcpPublisher:CliPath" },
             { "--dcp-container-runtime", "DcpPublisher:ContainerRuntime" },
             { "--dcp-dependency-check-timeout", "DcpPublisher:DependencyCheckTimeout" },
             { "--dcp-dashboard-path", "DcpPublisher:DashboardPath" }
         };
+
         _innerBuilder.Configuration.AddCommandLine(options.Args ?? [], switchMappings);
 
         // Configure PipelineOptions from the Pipeline section

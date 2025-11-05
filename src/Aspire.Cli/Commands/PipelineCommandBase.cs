@@ -34,6 +34,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = "Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'."
     };
 
+    protected readonly Option<bool> _includeExceptionDetailsOption = new("--include-exception-details")
+    {
+        Description = "Include exception details (stack traces) in pipeline logs."
+    };
+
     protected readonly Option<string?> _environmentOption = new("--environment", "-e")
     {
         Description = "The environment to use for the operation. The default is 'Production'."
@@ -82,6 +87,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         Options.Add(_logLevelOption);
         Options.Add(_environmentOption);
+        Options.Add(_includeExceptionDetailsOption);
 
         // In the publish and deploy commands we forward all unrecognized tokens
         // through to the underlying tooling when we launch the app host.
@@ -218,11 +224,16 @@ internal abstract class PipelineCommandBase : BaseCommand
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
             var debugMode = parseResult.GetValue<bool?>("--debug") ?? false;
+            
+            // Check if debug or trace logging is enabled
+            var logLevel = parseResult.GetValue(_logLevelOption);
+            var isDebugOrTraceLoggingEnabled = logLevel?.Equals("debug", StringComparison.OrdinalIgnoreCase) == true ||
+                                                 logLevel?.Equals("trace", StringComparison.OrdinalIgnoreCase) == true;
 
             var noFailuresReported = debugMode switch
             {
                 true => await ProcessPublishingActivitiesDebugAsync(publishingActivities, backchannel, cancellationToken),
-                false => await ProcessAndDisplayPublishingActivitiesAsync(publishingActivities, backchannel, cancellationToken),
+                false => await ProcessAndDisplayPublishingActivitiesAsync(publishingActivities, backchannel, isDebugOrTraceLoggingEnabled, cancellationToken),
             };
 
             // Send terminal progress bar stop sequence
@@ -400,11 +411,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         return !hasErrors;
     }
 
-    public async Task<bool> ProcessAndDisplayPublishingActivitiesAsync(IAsyncEnumerable<PublishingActivity> publishingActivities, IAppHostBackchannel backchannel, CancellationToken cancellationToken)
+    public async Task<bool> ProcessAndDisplayPublishingActivitiesAsync(IAsyncEnumerable<PublishingActivity> publishingActivities, IAppHostBackchannel backchannel, bool isDebugOrTraceLoggingEnabled, CancellationToken cancellationToken)
     {
         var stepCounter = 1;
         var steps = new Dictionary<string, StepInfo>();
-        var logger = new ConsoleActivityLogger(_hostEnvironment);
+        var logger = new ConsoleActivityLogger(_hostEnvironment, isDebugOrTraceLoggingEnabled);
         logger.StartSpinner();
         PublishingActivity? publishingActivity = null;
 

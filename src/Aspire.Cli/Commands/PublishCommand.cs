@@ -49,11 +49,10 @@ internal sealed class PublishCommand : PipelineCommandBase
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "publish" };
 
-        var targetPath = fullyQualifiedOutputPath is not null
-            ? fullyQualifiedOutputPath
-            : Path.Combine(Environment.CurrentDirectory, "aspire-output");
-
-        baseArgs.AddRange(["--output-path", targetPath]);
+        if (fullyQualifiedOutputPath is not null)
+        {
+            baseArgs.AddRange(["--output-path", fullyQualifiedOutputPath]);
+        }
 
         // Add --log-level and --envionment flags if specified
         var logLevel = parseResult.GetValue(_logLevelOption);
@@ -61,6 +60,12 @@ internal sealed class PublishCommand : PipelineCommandBase
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);
+        }
+
+        var includeExceptionDetails = parseResult.GetValue(_includeExceptionDetailsOption);
+        if (includeExceptionDetails)
+        {
+            baseArgs.AddRange(["--include-exception-details", "true"]);
         }
 
         var environment = parseResult.GetValue(_environmentOption);
@@ -76,5 +81,5 @@ internal sealed class PublishCommand : PipelineCommandBase
 
     protected override string GetCanceledMessage() => InteractionServiceStrings.OperationCancelled;
 
-    protected override string GetProgressMessage(ParseResult parseResult) => "Executing step \"publish\"";
+    protected override string GetProgressMessage(ParseResult parseResult) => "Executing step publish";
 }

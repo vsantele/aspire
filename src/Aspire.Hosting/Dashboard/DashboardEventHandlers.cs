@@ -612,26 +612,26 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         static ReferenceExpression GetTargetUrlExpression(EndpointReference e) =>
             ReferenceExpression.Create($"{e.Property(EndpointProperty.Scheme)}://{e.EndpointAnnotation.TargetHost}:{e.Property(EndpointProperty.TargetPort)}");
 
-        var otlpGrpc = dashboardResource.GetEndpoint(OtlpGrpcEndpointName);
+        var otlpGrpc = dashboardResource.GetEndpoint(OtlpGrpcEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
         if (otlpGrpc.Exists)
         {
             context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpGrpcUrlName.EnvVarName] = GetTargetUrlExpression(otlpGrpc);
         }
 
-        var otlpHttp = dashboardResource.GetEndpoint(OtlpHttpEndpointName);
+        var otlpHttp = dashboardResource.GetEndpoint(OtlpHttpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
         if (otlpHttp.Exists)
         {
             context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpHttpUrlName.EnvVarName] = GetTargetUrlExpression(otlpHttp);
         }
 
-        var mcp = dashboardResource.GetEndpoint(McpEndpointName);
+        var mcp = dashboardResource.GetEndpoint(McpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
         if (!mcp.Exists)
         {
             // Fallback to frontend https or http endpoint if not configured.
-            mcp = dashboardResource.GetEndpoint("https");
+            mcp = dashboardResource.GetEndpoint("https", KnownNetworkIdentifiers.LocalhostNetwork);
             if (!mcp.Exists)
             {
-                mcp = dashboardResource.GetEndpoint("http");
+                mcp = dashboardResource.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork);
             }
         }
 
@@ -644,11 +644,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DashboardMcpUrlName.EnvVarName] = GetTargetUrlExpression(mcp);
         }
 
+        var frontendEndpoints = dashboardResource.GetEndpoints(KnownNetworkIdentifiers.LocalhostNetwork).ToList();
         var aspnetCoreUrls = new ReferenceExpressionBuilder();
         var first = true;
 
         // Turn http and https endpoints into a single ASPNETCORE_URLS environment variable.
-        foreach (var e in dashboardResource.GetEndpoints().Where(e => e.EndpointName is "http" or "https"))
+        foreach (var e in frontendEndpoints.Where(e => e.EndpointName is "http" or "https"))
         {
             if (!first)
             {
@@ -661,6 +662,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         if (!aspnetCoreUrls.IsEmpty)
         {
+            // The URL that the dashboard binds to is proxied. We need to set the public URL to the proxied URL.
+            // This lets the dashboard provide the correct URL to clients.
+            // Prefer https endpoint for public URL if it exists.
+            var publicEndpoint = frontendEndpoints.FirstOrDefault(e => e.EndpointName is "https") ?? frontendEndpoints.First(e => e.EndpointName is "http");
+            if (publicEndpoint.Exists)
+            {
+                context.EnvironmentVariables[DashboardConfigNames.DashboardFrontendPublicUrlName.EnvVarName] = publicEndpoint.Url;
+            }
+
             // Combine into a single expression
             context.EnvironmentVariables[DashboardConfigNames.DashboardFrontendUrlName.EnvVarName] = aspnetCoreUrls.Build();
         }
