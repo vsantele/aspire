@@ -364,9 +364,7 @@ public static class PythonAppResourceBuilderExtensions
             }
         });
 
-        // Configure required environment variables for custom certificate trust when running as an executable
-        // Python defaults to using System scope to allow combining custom CAs with system CAs as there's no clean
-        // way to simply append additional certificates to default Python trust stores such as certifi.
+        // Configure required environment variables for custom certificate trust when running as an executable.
         resourceBuilder
             .WithCertificateTrustScope(CertificateTrustScope.System)
             .WithCertificateTrustConfiguration(ctx =>
@@ -375,7 +373,7 @@ public static class PythonAppResourceBuilderExtensions
                 {
                     var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
                     var logger = resourceLogger.GetLogger(ctx.Resource);
-                    logger.LogWarning("Certificate trust scope is set to 'Append', but Python resources do not support appending to the default certificate authorities; only OTLP certificate trust will be applied. Consider using 'System' or 'Override' certificate trust scopes instead.");
+                    logger.LogInformation("Certificate trust scope is set to 'Append', but Python resources do not support appending to the default certificate authorities; only OTLP certificate trust will be applied.");
                 }
                 else
                 {
@@ -552,10 +550,13 @@ public static class PythonAppResourceBuilderExtensions
                     "type=cache,target=/root/.cache/uv");
         }
 
+        var logger = context.Services.GetService<ILogger<PythonAppResource>>();
+        context.Builder.AddContainerFilesStages(context.Resource, logger);
+
         var runtimeBuilder = context.Builder
             .From(runtimeImage, "app")
             .EmptyLine()
-            .AddContainerFiles(context.Resource, "/app")
+            .AddContainerFiles(context.Resource, "/app", logger)
             .Comment("------------------------------")
             .Comment("🚀 Runtime stage")
             .Comment("------------------------------")
@@ -605,10 +606,13 @@ public static class PythonAppResourceBuilderExtensions
         var requirementsTxtPath = Path.Combine(resource.WorkingDirectory, "requirements.txt");
         var hasRequirementsTxt = File.Exists(requirementsTxtPath);
 
+        var logger = context.Services.GetService<ILogger<PythonAppResource>>();
+        context.Builder.AddContainerFilesStages(context.Resource, logger);
+
         var stage = context.Builder
             .From(runtimeImage)
             .EmptyLine()
-            .AddContainerFiles(context.Resource, "/app")
+            .AddContainerFiles(context.Resource, "/app", logger)
             .Comment("------------------------------")
             .Comment("🚀 Python Application")
             .Comment("------------------------------")
@@ -665,35 +669,6 @@ public static class PythonAppResourceBuilderExtensions
                 stage.Entrypoint([entrypoint]);
                 break;
         }
-    }
-
-    private static DockerfileStage AddContainerFiles(this DockerfileStage stage, IResource resource, string rootDestinationPath)
-    {
-        if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesDestinationAnnotations))
-        {
-            foreach (var containerFileDestination in containerFilesDestinationAnnotations)
-            {
-                // get image name
-                if (!containerFileDestination.Source.TryGetContainerImageName(out var imageName))
-                {
-                    throw new InvalidOperationException("Cannot add container files: Source resource does not have a container image name.");
-                }
-
-                var destinationPath = containerFileDestination.DestinationPath;
-                if (!destinationPath.StartsWith('/'))
-                {
-                    destinationPath = $"{rootDestinationPath}/{destinationPath}";
-                }
-
-                foreach (var containerFilesSource in containerFileDestination.Source.Annotations.OfType<ContainerFilesSourceAnnotation>())
-                {
-                    stage.CopyFrom(imageName, containerFilesSource.SourcePath, destinationPath);
-                }
-            }
-
-            stage.EmptyLine();
-        }
-        return stage;
     }
 
     private static void ThrowIfNullOrContainsIsNullOrEmpty(string[] scriptArgs)
@@ -818,7 +793,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <code lang="csharp">
     /// var python = builder.AddPythonApp("api", "../python-api", "main.py")
     ///     .WithVirtualEnvironment("myenv");
-    /// 
+    ///
     /// // Disable automatic venv creation (require venv to exist)
     /// var python2 = builder.AddPythonApp("api2", "../python-api2", "main.py")
     ///     .WithVirtualEnvironment("myenv", createIfNotExists: false);
